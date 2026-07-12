@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: mq9-reaper
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/config
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: GEOCODING_API_KEY
+        sync: false

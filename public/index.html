@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MQ9 Reaper — Target Selection</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Barlow:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/app.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="app-header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div class="brand-text">
+            <p class="brand-name">MQ9 Reaper</p>
+            <p class="brand-sub">Target Selection</p>
+          </div>
+        </div>
+        <nav class="tabs" role="tablist" aria-label="Main">
+          <button
+            type="button"
+            class="tab is-active"
+            role="tab"
+            id="tab-select"
+            aria-selected="true"
+            aria-controls="panel-select"
+            data-tab="select"
+          >
+            Target Selection
+          </button>
+          <button
+            type="button"
+            class="tab"
+            role="tab"
+            id="tab-review"
+            aria-selected="false"
+            aria-controls="panel-review"
+            data-tab="review"
+          >
+            Review
+          </button>
+        </nav>
+      </header>
+
+      <main class="app-main">
+        <section
+          id="panel-select"
+          class="panel is-active"
+          role="tabpanel"
+          aria-labelledby="tab-select"
+        >
+          <aside class="side-panel">
+            <h2 class="side-title">Location</h2>
+            <p class="side-copy">
+              Phase 0 skeleton — map is centered on a hardcoded point. Location
+              input arrives in Phase 1.
+            </p>
+            <dl class="meta-list">
+              <div>
+                <dt>Center</dt>
+                <dd id="select-center-label">—</dd>
+              </div>
+              <div>
+                <dt>Map type</dt>
+                <dd id="select-map-type">—</dd>
+              </div>
+            </dl>
+          </aside>
+          <div class="map-stage">
+            <div id="map-select" class="map" role="application" aria-label="Target selection map"></div>
+            <div id="map-select-error" class="map-error" hidden></div>
+          </div>
+        </section>
+
+        <section
+          id="panel-review"
+          class="panel"
+          role="tabpanel"
+          aria-labelledby="tab-review"
+          hidden
+        >
+          <aside class="side-panel">
+            <h2 class="side-title">Review</h2>
+            <p class="side-copy">
+              Phase 0 skeleton — file upload and saved-target render arrive in
+              Phase 4. Map shares the same hardcoded center for now.
+            </p>
+          </aside>
+          <div class="map-stage">
+            <div id="map-review" class="map" role="application" aria-label="Review map"></div>
+            <div id="map-review-error" class="map-error" hidden></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/js/app.js" type="module"></script>
+  </body>
+</html>
