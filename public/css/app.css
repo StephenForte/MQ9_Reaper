@@ -135,7 +135,7 @@ body {
   display: none;
   flex: 1;
   min-height: 0;
-  grid-template-columns: minmax(220px, 280px) 1fr;
+  grid-template-columns: minmax(260px, 320px) 1fr;
 }
 
 .panel.is-active {
@@ -164,12 +164,34 @@ body {
   color: var(--text-muted);
 }
 
+.side-section {
+  margin: 0 0 1.25rem;
+  padding-bottom: 1.15rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.side-section-title {
+  margin: 0 0 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
 .loc-form {
   display: grid;
   gap: 0.65rem;
-  margin: 0 0 1.15rem;
-  padding-bottom: 1.15rem;
-  border-bottom: 1px solid var(--border);
+  margin: 0 0 1rem;
+}
+
+.loc-form-compact {
+  margin-bottom: 0;
+}
+
+.loc-form:last-child {
+  margin-bottom: 0;
 }
 
 .field {
@@ -182,6 +204,16 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
+  align-items: end;
+}
+
+.field-row-apply {
+  grid-template-columns: 1fr auto;
+}
+
+.field-row-apply .btn {
+  align-self: end;
+  height: 2.35rem;
 }
 
 .field-label {
@@ -260,15 +292,58 @@ body {
 }
 
 .hint {
-  margin: 0 0 1.15rem;
+  margin: 0 0 0.85rem;
   font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.04em;
   color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.hint-tight {
+  margin-bottom: 0;
+}
+
+.candidates-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin: 0 0 0.85rem;
+}
+
+.selection-meter {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.45rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.selection-counter {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.selection-counter.is-under {
+  color: var(--text-muted);
+}
+
+.selection-counter.is-exact {
+  color: var(--accent);
+}
+
+.selection-counter.is-over {
+  color: var(--danger);
 }
 
 .meta-list {
-  margin: 0;
+  margin: 0.25rem 0 0;
   display: grid;
   gap: 0.85rem;
 }

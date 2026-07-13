@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "test": "node --test test/*.test.js test/*.test.mjs",
     "health": "node -e \"fetch('http://localhost:'+(process.env.PORT||3000)+'/api/health').then(r=>r.json()).then(console.log).catch(e=>{console.error(e);process.exit(1)})\""
   },
   "engines": {

@@ -14,7 +14,7 @@ Work one phase at a time. Do not pull later-phase UI into earlier ones.
 |-------|------|----------|--------------|
 | **P0** | Deployable shell | Express static + `/api/config`, two tabs, Maps loads | Location forms, dots, export |
 | **P1** | Location + map | Address (proxy), map click, lat/long, radius circle, `fitBounds`, MD config | Dots, selection, export |
-| **P2** | Dots + selection | Uniform-disk generation, toggle select, exact-N gate, confirm-on-recenter | Metadata form, JSON export |
+| **P2** | Dots + selection | Uniform-disk generation via **Load dots**, toggle select, exact-N gate, confirm when ≥1 selected | Metadata form, JSON export |
 | **P3** | Annotate + export | Targeting list, validation, client JSON download (§4 schema) | Review upload |
 | **P4** | Review | Upload, schema validate, re-render, info windows | Editing / re-export |
 | **P5** | Harden | §8.3 errors, browser pass, key-restriction check | New features |
@@ -32,8 +32,8 @@ Exit criteria are in the PRD §9. Demo each phase before expanding scope.
 - **Persistence:** Client download/upload of JSON only. Do not add disk/DB storage unless the PRD is updated.
 - **Config defaults:** Edit `config/app-config.md` (YAML frontmatter). `config.js` loads it. Keep invariant `requiredSelections < dotCount`. Admin UI is P6 — do not invent a second config store.
 - **Maps:** Default `mapType` is `hybrid`.
-- **Recenter:** When `confirmOnRecenter` is true and `willLoseWork()` is true (P2+ selections), prompt before center/radius change.
-- **Dots (P2):** Use `public/js/dots.js` generation — uniform disk + `minDotSpacingMeters` rejection (close ok, overlap not).
+- **Recenter:** When `confirmOnRecenter` is true and ≥1 candidate is selected, prompt before center/radius change or Reload dots.
+- **Dots (P2):** Operator clicks **Load dots** (no auto-scatter). Use `public/js/dots.js` — uniform disk + `minDotSpacingMeters` rejection (close ok, overlap not). Center/radius change clears candidates until Load again.
 - **Admin (P6):** Protect with env `ADMIN_USERNAME` / `ADMIN_PASSWORD` only — no OAuth.
 ## Repo layout
 
@@ -47,14 +47,17 @@ public/
   css/app.css             App styles
   js/
     app.js                Boot / map lifecycle
-    selection.js          Selection-tab center, circle, location forms
-    dots.js               Candidate dot generation (P2-ready, no-overlap)
+    selection.js          Selection-tab center, circle, forms, candidates
+    selection-logic.js    Pure selection helpers (testable)
+    dots.js               Candidate dot generation (uniform disk)
+    dot-markers.js        Selected / unselected marker icons
     confirm.js            Operator confirm dialog
     tabs.js               Tab UI
-    geo.js                Bounds + lat/lng helpers (shared with future P2)
+    geo.js                Bounds + lat/lng helpers
     maps-loader.js        Google Maps script loader
     constants.js          Miles/meters constants
     ui.js                 Field/map error helpers
+test/                     node:test coverage (dots, geo, selection-logic, config)
 render.yaml               Render Blueprint
 target-selection-app-PRD.md
 ```
@@ -86,7 +89,7 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 2. Client download/upload only (Q2).
 3. Exact N selections; `blockExtraSelections` configurable (Q3 — wire in P2).
 4. Dots may be close but must not overlap; `minDotSpacingMeters` (default 50) via rejection sampling (Q4).
-5. Confirm on recenter when work would be lost (Q5).
+5. Confirm on recenter when ≥1 candidate is selected (`confirmOnRecenter`). Dots load only via **Load dots**.
 6. Config via `config/app-config.md` now; Admin in P6 (Q6).
 7. `hybrid` default map type (Q7).
 8. Review shows metadata on marker click (Q8 — P4).
@@ -99,6 +102,7 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 ```bash
 cp .env.example .env   # set both keys
 npm install
+npm test
 npm start              # http://localhost:3000
 ```
 

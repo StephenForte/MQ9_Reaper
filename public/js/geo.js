@@ -1,16 +1,26 @@
 import { METERS_PER_DEG_LAT } from './constants.js';
 
 /**
+ * Lat/lng degree offsets for a radius in meters (PRD §5.2 / §5.3).
+ * @param {{ lat: number, lng: number }} center
+ * @param {number} radiusMeters
+ * @returns {{ dLat: number, dLng: number }}
+ */
+export function radiusOffsetDegrees(center, radiusMeters) {
+  const dLat = radiusMeters / METERS_PER_DEG_LAT;
+  const cosLat = Math.cos((center.lat * Math.PI) / 180);
+  const dLng = radiusMeters / (METERS_PER_DEG_LAT * Math.max(cosLat, 0.000001));
+  return { dLat, dLng };
+}
+
+/**
  * Bounds box from center ± radius (PRD §5.2 / §5.3).
  * @param {{ lat: number, lng: number }} center
  * @param {number} radiusMeters
  * @returns {google.maps.LatLngBounds}
  */
 export function boundsForRadius(center, radiusMeters) {
-  const dLat = radiusMeters / METERS_PER_DEG_LAT;
-  const cosLat = Math.cos((center.lat * Math.PI) / 180);
-  const dLng = radiusMeters / (METERS_PER_DEG_LAT * Math.max(cosLat, 0.000001));
-
+  const { dLat, dLng } = radiusOffsetDegrees(center, radiusMeters);
   return new google.maps.LatLngBounds(
     { lat: center.lat - dLat, lng: center.lng - dLng },
     { lat: center.lat + dLat, lng: center.lng + dLng }

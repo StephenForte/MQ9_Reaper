@@ -96,4 +96,10 @@ function loadAppConfig() {
 
 const appConfig = loadAppConfig();
 
-module.exports = { appConfig, loadAppConfig, CONFIG_MD };
+module.exports = {
+  appConfig,
+  loadAppConfig,
+  CONFIG_MD,
+  parseFrontmatter,
+  toAppConfig,
+};

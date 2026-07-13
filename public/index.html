@@ -60,70 +60,110 @@
           <aside class="side-panel">
             <h2 class="side-title">Location</h2>
             <p class="side-copy">
-              Set the center by address, map click, or lat/long. A radius circle
-              is drawn and the map zooms to fit.
+              Set the center, apply a radius, then load candidate dots and
+              shortlist exactly the required count.
             </p>
 
-            <form id="form-address" class="loc-form" novalidate>
-              <label class="field">
-                <span class="field-label">Street address</span>
-                <input
-                  id="input-address"
-                  name="address"
-                  type="text"
-                  autocomplete="street-address"
-                  placeholder="e.g. 123 Main St, City, ST"
-                />
-              </label>
-              <button type="submit" class="btn btn-primary" id="btn-geocode">
-                Geocode
-              </button>
-              <p id="address-error" class="field-error" role="alert" hidden></p>
-            </form>
+            <section class="side-section" aria-labelledby="center-heading">
+              <h3 id="center-heading" class="side-section-title">Center</h3>
+              <p class="hint">Use one method — the latest wins.</p>
 
-            <form id="form-latlng" class="loc-form" novalidate>
-              <div class="field-row">
+              <form id="form-address" class="loc-form" novalidate>
                 <label class="field">
-                  <span class="field-label">Latitude</span>
+                  <span class="field-label">Street address</span>
                   <input
-                    id="input-lat"
-                    name="lat"
+                    id="input-address"
+                    name="address"
                     type="text"
-                    inputmode="decimal"
-                    placeholder="37.7996"
+                    autocomplete="street-address"
+                    placeholder="e.g. 123 Main St, City, ST"
                   />
                 </label>
-                <label class="field">
-                  <span class="field-label">Longitude</span>
-                  <input
-                    id="input-lng"
-                    name="lng"
-                    type="text"
-                    inputmode="decimal"
-                    placeholder="-121.7124"
-                  />
-                </label>
+                <button type="submit" class="btn btn-primary" id="btn-geocode">
+                  Geocode address
+                </button>
+                <p id="address-error" class="field-error" role="alert" hidden></p>
+              </form>
+
+              <form id="form-latlng" class="loc-form" novalidate>
+                <div class="field-row">
+                  <label class="field">
+                    <span class="field-label">Latitude</span>
+                    <input
+                      id="input-lat"
+                      name="lat"
+                      type="text"
+                      inputmode="decimal"
+                      placeholder="37.7996"
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Longitude</span>
+                    <input
+                      id="input-lng"
+                      name="lng"
+                      type="text"
+                      inputmode="decimal"
+                      placeholder="-121.7124"
+                    />
+                  </label>
+                </div>
+                <button type="submit" class="btn btn-primary">Set lat / long</button>
+                <p id="latlng-error" class="field-error" role="alert" hidden></p>
+              </form>
+
+              <p class="hint hint-tight">Or click the map to drop the center pin.</p>
+            </section>
+
+            <section class="side-section" aria-labelledby="radius-heading">
+              <h3 id="radius-heading" class="side-section-title">Radius</h3>
+              <form id="form-radius" class="loc-form loc-form-compact" novalidate>
+                <div class="field-row field-row-apply">
+                  <label class="field">
+                    <span class="field-label">Miles</span>
+                    <input
+                      id="input-radius"
+                      name="radius"
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      required
+                    />
+                  </label>
+                  <button type="submit" class="btn btn-primary" id="btn-apply-radius">
+                    Apply
+                  </button>
+                </div>
+                <p id="radius-error" class="field-error" role="alert" hidden></p>
+              </form>
+            </section>
+
+            <section class="side-section" aria-labelledby="candidates-heading">
+              <h3 id="candidates-heading" class="side-section-title">Candidates</h3>
+              <p class="hint">
+                Load dots inside the radius, then click dots on the map to
+                select or deselect.
+              </p>
+              <div class="candidates-actions">
+                <button type="button" class="btn btn-primary" id="btn-load-dots">
+                  Load dots
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  id="btn-save-targets"
+                  disabled
+                >
+                  Save Targets
+                </button>
               </div>
-              <button type="submit" class="btn btn-primary">Set lat/long</button>
-              <p id="latlng-error" class="field-error" role="alert" hidden></p>
-            </form>
-
-            <form id="form-radius" class="loc-form" novalidate>
-              <label class="field">
-                <span class="field-label">Radius (miles)</span>
-                <input
-                  id="input-radius"
-                  name="radius"
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  required
-                />
-              </label>
-              <p id="radius-error" class="field-error" role="alert" hidden></p>
-            </form>
-
-            <p class="hint">Click the map to drop a center pin.</p>
+              <div class="selection-meter" aria-live="polite">
+                <span class="field-label">Selected</span>
+                <span id="selection-counter" class="selection-counter">0 / 12</span>
+              </div>
+              <p id="candidates-status" class="hint hint-tight">No candidates loaded.</p>
+              <p id="candidates-error" class="field-error" role="alert" hidden></p>
+            </section>
 
             <dl class="meta-list">
               <div>
@@ -145,7 +185,12 @@
             </dl>
           </aside>
           <div class="map-stage">
-            <div id="map-select" class="map" role="application" aria-label="Target selection map"></div>
+            <div
+              id="map-select"
+              class="map"
+              role="application"
+              aria-label="Target selection map"
+            ></div>
             <div id="map-select-error" class="map-error" hidden></div>
           </div>
         </section>
@@ -166,7 +211,12 @@
             <p class="hint">Placeholder — no upload yet.</p>
           </aside>
           <div class="map-stage">
-            <div id="map-review" class="map" role="application" aria-label="Review map"></div>
+            <div
+              id="map-review"
+              class="map"
+              role="application"
+              aria-label="Review map"
+            ></div>
             <div id="map-review-error" class="map-error" hidden></div>
           </div>
         </section>
