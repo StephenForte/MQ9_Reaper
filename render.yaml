@@ -5,11 +5,15 @@ services:
     plan: free
     buildCommand: npm install
     startCommand: npm start
-    healthCheckPath: /api/config
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
         value: "20"
       - key: GOOGLE_MAPS_API_KEY
         sync: false
       - key: GEOCODING_API_KEY
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
         sync: false

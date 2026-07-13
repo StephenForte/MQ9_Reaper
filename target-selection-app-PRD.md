@@ -183,7 +183,7 @@ dotLat = centerLat + dLat
 dotLng = centerLng + dLng
 ```
 - `111320` = approximate meters per degree of latitude. The `cos(lat)` term corrects longitude spacing. This is accurate enough for a few-mile radius; distortion is negligible below ~10 mi outside polar latitudes. *(Assumption: this approximation is acceptable for v1; a geodesic library is not required.)*
-- **Minimum spacing between dots is not enforced** in v1 — dots may occasionally overlap. If overlap is undesirable, add rejection sampling (regenerate a dot if it's within N meters of an existing one). Flagged in Open Questions (Q4).
+- **Minimum spacing:** dots may be close, but must not overlap. Reject a candidate if it is within `minDotSpacingMeters` (config, default 50) of an already-placed dot; retry up to a bounded attempt count. If packing still fails (tiny radius / large spacing), the last candidate is kept so `dotCount` stays exact — prefer lowering spacing or radius over under-generating.
 
 ### 5.4 Selection state
 - Each dot holds `{ id, lat, lng, selected: bool }`.
@@ -199,9 +199,17 @@ dotLng = centerLng + dLng
 | `radiusMiles` | **3** | number > 0 | Radius circle, zoom fit, dot generation bounds. |
 | `dotCount` | **25** | integer > `requiredSelections` | Number of candidate dots generated. |
 | `requiredSelections` | **12** | integer ≥ 1, < `dotCount` | Number of dots that must be selected before export. |
-| `mapType` | **`satellite`** | `satellite` \| `hybrid` | Base map imagery. *(Assumption: included as a config since "hybrid" is a common ask.)* |
+| `blockExtraSelections` | **true** | boolean | If true, block selecting above `requiredSelections` (exact-N). If false, allow extras but keep Save gated to exact N. |
+| `minDotSpacingMeters` | **50** | number ≥ 0 | Min distance between candidate dots; close allowed, overlap not. |
+| `mapType` | **`hybrid`** | `satellite` \| `hybrid` | Base map imagery (`hybrid` = imagery + labels). |
+| `radiusUnit` | **`miles`** | `miles` (v1) | Display / input unit. km out of scope for v1. |
+| `confirmOnRecenter` | **true** | boolean | Prompt before center/radius change when it would clear selection / regenerate dots. |
+| `seededRng` | **false** | boolean | If false, export writes `seed: null`. |
 
-**Config delivery (v1):** expose these as values in a single config object/module the builder can edit (e.g., a `config.js` or environment-driven defaults), not necessarily a settings UI. *(Assumption — a settings panel is a v2 nicety. Flag if you want it in-app now.)* The app must guard the invariant `requiredSelections < dotCount`.
+**Config delivery:**
+
+1. **Now (v1 file):** edit `config/app-config.md` (YAML frontmatter). Server loads it via `config.js`. Restart after edits. Guard invariant `requiredSelections < dotCount`.
+2. **Later (P6 Admin):** in-app Admin section writes the same parameters (no separate product settings model — same fields).
 
 ---
 
@@ -292,29 +300,33 @@ Evergreen desktop browsers, latest two versions: Chrome, Edge, Firefox, Safari. 
 
 | Phase | Goal | Includes | Exit criteria |
 |-------|------|----------|---------------|
-| **P0 — Skeleton & hosting** | App deploys and serves. | Render Web Service, static frontend shell, two-tab nav, env var wiring, Maps JS loads with a restricted key. | Blank two-tab app renders a satellite map centered on a hardcoded point on Render. |
-| **P1 — Location input + map** | All three center-setting methods work. | Address (via `/api/geocode` proxy), map-click, lat/long entry; radius circle; `fitBounds` zoom. | Any of the three inputs correctly centers the map and draws the default 3-mi circle. |
-| **P2 — Dot generation + selection** | Candidate dots and shortlist mechanics. | Uniform-disk generation of `dotCount` dots (§5.3), click-to-toggle, `selected/12` counter, exact-12 gating, regenerate on center/radius change. | User can generate 25 dots and select exactly 12; Save Targets enables only at 12. |
-| **P3 — Metadata + export** | Annotate and save. | Targeting list form (name/confidence/priority), per-row validation, JSON export matching §4 via client download. | A complete, schema-valid JSON file downloads with 12 annotated targets + center/radius/generation metadata. |
-| **P4 — Review tab** | Load and display. | File upload, JSON parse + schema validation, re-render saved center/radius, plot 12 markers, metadata info windows. | A file exported in P3 loads and renders identically with clickable point details. |
-| **P5 — Hardening** | Edge cases + config. | All error handling from §8.3, config object for the four parameters (§6), browser pass, key-restriction verification. | Every §8.3 row behaves as specified; parameters tunable via config. |
+| **P0 — Skeleton & hosting** | App deploys and serves. | Render Web Service, static frontend shell, two-tab nav, env var wiring, Maps JS loads with a restricted key. | Blank two-tab app renders a map centered on a hardcoded point on Render. |
+| **P1 — Location input + map** | All three center-setting methods work. | Address (via `/api/geocode` proxy), map-click, lat/long entry; radius circle; `fitBounds` zoom; `config/app-config.md` defaults (`hybrid`, miles). | Any of the three inputs correctly centers the map and draws the default radius circle. |
+| **P2 — Dot generation + selection** | Candidate dots and shortlist mechanics. | Uniform-disk generation of `dotCount` dots (§5.3) with `minDotSpacingMeters` rejection sampling, click-to-toggle, `selected/N` counter, exact-N gating via `requiredSelections` + `blockExtraSelections`, regenerate on center/radius change, confirm-on-recenter when work would be lost. | User can generate `dotCount` dots and select exactly `requiredSelections`; Save Targets enables only at N; dots do not overlap. |
+| **P3 — Metadata + export** | Annotate and save. | Targeting list form (name/confidence/priority), per-row validation, JSON export matching §4 via client download (`seed: null` unless `seededRng`). | A complete, schema-valid JSON file downloads with N annotated targets + center/radius/generation metadata. |
+| **P4 — Review tab** | Load and display. | File upload, JSON parse + schema validation, re-render saved center/radius, plot N markers, metadata info windows. | A file exported in P3 loads and renders identically with clickable point details. |
+| **P5 — Hardening** | Edge cases + polish. | All error handling from §8.3, browser pass, key-restriction verification, config MD validation messages. | Every §8.3 row behaves as specified; parameters tunable via `config/app-config.md`. |
+| **P6 — Admin config** | In-app config editing. | Admin section gated by simple shared credentials (`ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars); view/edit §6 parameters and persist them (same fields as the MD file). | Operator can change radius / counts / map type / selection gating / spacing without editing files or redeploying code. |
 
-*(Assumption: P0–P5 are sequential; each is independently demoable. Parallelization is possible — e.g., Review tab (P4) can start once the schema (§4) is frozen.)*
+*(Assumption: P0–P6 are sequential; each is independently demoable. Parallelization is possible — e.g., Review tab (P4) can start once the schema (§4) is frozen.)*
 
 ---
 
 ## 10. Open Questions
 
-1. **Q1 — Backend or static?** Ship as a Render Web Service with a geocode proxy (recommended, §7.1/§7.3), or a pure Static Site with client-side geocoding? Decision changes topology and key handling.
-2. **Q2 — Storage in v1?** Confirm client download/upload only (recommended), or is server-side storage of saved sets in-scope now (pulls in persistent disk/object storage + likely auth)?
-3. **Q3 — Selection count semantics.** Exactly 12, or a minimum of 12? If exactly, should the app prevent a 13th click or just keep Save disabled above 12? (Spec currently assumes *exactly 12*.)
-4. **Q4 — Dot overlap.** Enforce a minimum spacing between generated dots (rejection sampling), or allow overlaps? (Currently allowed.)
-5. **Q5 — Losing work on recenter.** Changing the center clears selections and regenerates dots. Do you want a confirmation prompt before that happens?
-6. **Q6 — Settings UI.** Are the four configurable parameters (§6) edited in-app (settings panel) or just at build time via config? (Currently build-time config.)
-7. **Q7 — Map type default.** `satellite` (imagery only) vs `hybrid` (imagery + street/label overlay)? (Currently `satellite`, with `hybrid` as a config option.)
-8. **Q8 — Review metadata display.** Confirm the Review tab should show name/confidence/priority on point click (AC-13). It's assumed in, since plotting bare points is low-value.
-9. **Q9 — Seeded RNG.** Do you want reproducible dot generation via a stored `seed` (audit/repeat), or is unseeded randomness fine (write `seed: null`)?
-10. **Q10 — Units.** Radius is in miles. Do you also want a meters/kilometers toggle, or is miles-only fine for v1?
+### Decided
+
+1. **Q1 — Backend or static?** → Render Web Service + geocode proxy.
+2. **Q2 — Storage in v1?** → Client download/upload only.
+3. **Q3 — Selection count semantics.** → Exact N (`requiredSelections`, default 12). `blockExtraSelections` (default `true`) is configurable in `config/app-config.md`; Admin UI in P6.
+4. **Q5 — Losing work on recenter.** → Yes, confirm when change would clear selection / regenerate dots (`confirmOnRecenter`).
+5. **Q6 / config delivery.** → MD file now (`config/app-config.md`); Admin section in **P6**.
+6. **Q7 — Map type default.** → `hybrid`.
+7. **Q8 — Review metadata display.** → Yes, show name/confidence/priority on point click (P4).
+8. **Q9 — Seeded RNG.** → Unseeded; export `seed: null` (`seededRng: false`).
+9. **Q10 — Units.** → Miles only in v1 (`radiusUnit: miles`), configurable for a later unit expansion.
+10. **Q4 — Dot overlap.** → Close allowed; overlap not. Rejection sampling with `minDotSpacingMeters` (default 50).
+11. **P6 Admin auth.** → Simple shared `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars (Render + `.env`). No OAuth/SSO in v1.
 
 ---
 

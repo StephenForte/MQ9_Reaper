@@ -1,31 +1,36 @@
 # MQ9 Reaper — Target Selection App
 
-Two-tab web app for selecting and reviewing geographic points on a Google Maps satellite view. See the product PRD for full scope.
+Two-tab web app for selecting and reviewing geographic points on a Google Maps satellite view. Full product scope: `target-selection-app-PRD.md`. Agent/contributor contract: `AGENTS.md`.
 
-## Phase 0 (this commit)
+## Current phase: P1 — Location input + map
 
-Skeleton & hosting:
+- Address geocoding via `GET /api/geocode?q=...` (Geocoding key stays server-side)
+- Map-click and lat/long entry to set center
+- Default 3-mile radius circle with `fitBounds` zoom
+- Radius control redraws the circle and refits zoom
 
-- Express web service serving a static frontend
-- Two-tab nav: **Target Selection** and **Review**
-- Env wiring for `GOOGLE_MAPS_API_KEY` (browser) and `GEOCODING_API_KEY` (server, Phase 1+)
-- Satellite map centered on a hardcoded point (`37.7996, -121.7124`)
+P0 shell (Express, two tabs, Maps load, env wiring) remains the base.
 
 ## Local setup
 
-1. Copy env file and add your Maps JS key:
+1. Copy env and add keys:
 
 ```bash
 cp .env.example .env
 ```
 
-2. In [Google Cloud Console](https://console.cloud.google.com/), enable **Maps JavaScript API**, create an API key, and restrict it by:
-   - **Application**: HTTP referrers — e.g. `http://localhost:3000/*`
-   - **API**: Maps JavaScript API only
+2. In [Google Cloud Console](https://console.cloud.google.com/), enable:
+   - **Maps JavaScript API**
+   - **Geocoding API** (address input)
 
-3. Set `GOOGLE_MAPS_API_KEY` in `.env`.
+3. Create two keys (recommended):
 
-4. Install and run:
+| Env var | Restrict by | Restrict API to |
+|---------|-------------|-----------------|
+| `GOOGLE_MAPS_API_KEY` | HTTP referrers — e.g. `http://localhost:3000/*` | Maps JavaScript API |
+| `GEOCODING_API_KEY` | IP (or none for local) | Geocoding API |
+
+4. Set both in `.env`, then:
 
 ```bash
 npm install
@@ -34,32 +39,39 @@ npm start
 
 Open [http://localhost:3000](http://localhost:3000).
 
-`GEOCODING_API_KEY` can stay empty until Phase 1 (address geocode proxy).
+Without `GEOCODING_API_KEY`, map click and lat/long still work; address geocode returns 503.
 
 ## Deploy on Render
 
 1. Push this repo to GitHub.
-2. In Render, create a **Web Service** from the repo (or use Blueprint with `render.yaml`).
-3. Set environment variables:
-   - `GOOGLE_MAPS_API_KEY` — browser Maps JS key, restricted to your Render domain referrer (e.g. `https://your-service.onrender.com/*`) and Maps JavaScript API only
-   - `GEOCODING_API_KEY` — optional until Phase 1; Geocoding API only, IP-restricted when used
-4. Deploy. Exit check for Phase 0: both tabs load; Target Selection shows a satellite map on the hardcoded center.
+2. Create a **Web Service** (or use Blueprint with `render.yaml`).
+3. Set:
+   - `GOOGLE_MAPS_API_KEY` — referrer-restrict to your Render domain + Maps JavaScript API
+   - `GEOCODING_API_KEY` — Geocoding API only; IP-restrict to Render egress when practical
+   - `ADMIN_USERNAME` / `ADMIN_PASSWORD` — optional until P6 Admin; set now if you want them ready on Render
+4. Deploy. P1 exit check: address, map click, or lat/long centers the map and draws the default 3-mi circle.
 
-## API (Phase 0)
+## API
 
 | Route | Purpose |
 |-------|---------|
-| `GET /api/config` | Returns public Maps key + default config (never geocoding key) |
-| `GET /api/geocode` | Stub — returns 501/503 until Phase 1 |
+| `GET /api/health` | Liveness + whether Maps/geocoding keys are configured |
+| `GET /api/config` | Public Maps key + defaults (never geocoding key) |
+| `GET /api/geocode?q=` | Proxies Google Geocoding → `{ lat, lng, formattedAddress }` |
 
 ## Project layout
 
 ```
-server.js          Express: static + /api/config + geocode stub
-config.js          Defaults (radius, dotCount, mapType, center)
+server.js              Express: static + health/config/geocode
+config.js              Loads config/app-config.md
+config/app-config.md   Editable defaults (radius, counts, mapType, …)
+lib/geocode.js         Geocode proxy helper
 public/
-  index.html       Two-tab shell
+  index.html           Two-tab shell + location forms
   css/app.css
-  js/app.js        Tabs + Maps JS bootstrap
-render.yaml        Render Blueprint
+  js/                  ES modules (app, selection, tabs, geo, …)
+render.yaml            Render Blueprint
+AGENTS.md              Coding / phase standards
 ```
+
+Tune product knobs in `config/app-config.md`, then restart the server. An in-app Admin editor is planned for phase P6.

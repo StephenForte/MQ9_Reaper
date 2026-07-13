@@ -31,6 +31,7 @@
             aria-selected="true"
             aria-controls="panel-select"
             data-tab="select"
+            tabindex="0"
           >
             Target Selection
           </button>
@@ -42,6 +43,7 @@
             aria-selected="false"
             aria-controls="panel-review"
             data-tab="review"
+            tabindex="-1"
           >
             Review
           </button>
@@ -58,13 +60,83 @@
           <aside class="side-panel">
             <h2 class="side-title">Location</h2>
             <p class="side-copy">
-              Phase 0 skeleton — map is centered on a hardcoded point. Location
-              input arrives in Phase 1.
+              Set the center by address, map click, or lat/long. A radius circle
+              is drawn and the map zooms to fit.
             </p>
+
+            <form id="form-address" class="loc-form" novalidate>
+              <label class="field">
+                <span class="field-label">Street address</span>
+                <input
+                  id="input-address"
+                  name="address"
+                  type="text"
+                  autocomplete="street-address"
+                  placeholder="e.g. 123 Main St, City, ST"
+                />
+              </label>
+              <button type="submit" class="btn btn-primary" id="btn-geocode">
+                Geocode
+              </button>
+              <p id="address-error" class="field-error" role="alert" hidden></p>
+            </form>
+
+            <form id="form-latlng" class="loc-form" novalidate>
+              <div class="field-row">
+                <label class="field">
+                  <span class="field-label">Latitude</span>
+                  <input
+                    id="input-lat"
+                    name="lat"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="37.7996"
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label">Longitude</span>
+                  <input
+                    id="input-lng"
+                    name="lng"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="-121.7124"
+                  />
+                </label>
+              </div>
+              <button type="submit" class="btn btn-primary">Set lat/long</button>
+              <p id="latlng-error" class="field-error" role="alert" hidden></p>
+            </form>
+
+            <form id="form-radius" class="loc-form" novalidate>
+              <label class="field">
+                <span class="field-label">Radius (miles)</span>
+                <input
+                  id="input-radius"
+                  name="radius"
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  required
+                />
+              </label>
+              <p id="radius-error" class="field-error" role="alert" hidden></p>
+            </form>
+
+            <p class="hint">Click the map to drop a center pin.</p>
+
             <dl class="meta-list">
               <div>
                 <dt>Center</dt>
                 <dd id="select-center-label">—</dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd id="select-source-label">—</dd>
+              </div>
+              <div>
+                <dt>Radius</dt>
+                <dd id="select-radius-label">—</dd>
               </div>
               <div>
                 <dt>Map type</dt>
@@ -88,9 +160,10 @@
           <aside class="side-panel">
             <h2 class="side-title">Review</h2>
             <p class="side-copy">
-              Phase 0 skeleton — file upload and saved-target render arrive in
-              Phase 4. Map shares the same hardcoded center for now.
+              Upload a saved targets JSON in Phase 4. Until then this map shows
+              the default center only.
             </p>
+            <p class="hint">Placeholder — no upload yet.</p>
           </aside>
           <div class="map-stage">
             <div id="map-review" class="map" role="application" aria-label="Review map"></div>

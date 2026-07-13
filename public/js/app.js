@@ -1,4 +1,7 @@
-const mapsScriptId = 'google-maps-js';
+import { ensureMapsApi } from './maps-loader.js';
+import { createSelectionController } from './selection.js';
+import { wireTabs } from './tabs.js';
+import { hideMapError, showMapError } from './ui.js';
 
 /**
  * @typedef {{ lat: number, lng: number }} LatLng
@@ -8,7 +11,12 @@ const mapsScriptId = 'google-maps-js';
  *     radiusMiles: number,
  *     dotCount: number,
  *     requiredSelections: number,
+ *     blockExtraSelections: boolean,
+ *     minDotSpacingMeters: number,
  *     mapType: string,
+ *     radiusUnit: string,
+ *     confirmOnRecenter: boolean,
+ *     seededRng: boolean,
  *     center: LatLng,
  *   }
  * }} AppConfig
@@ -20,8 +28,7 @@ let runtimeConfig = null;
 /** @type {Map<string, google.maps.Map>} */
 const mapsByPanel = new Map();
 
-/** @type {Promise<void> | null} */
-let mapsReadyPromise = null;
+const selection = createSelectionController();
 
 async function fetchConfig() {
   const res = await fetch('/api/config');
@@ -29,74 +36,6 @@ async function fetchConfig() {
     throw new Error(`Failed to load config (${res.status})`);
   }
   return /** @type {Promise<AppConfig>} */ (res.json());
-}
-
-function showMapError(panel, title, message) {
-  const el = document.getElementById(`map-${panel}-error`);
-  if (!el) return;
-  el.hidden = false;
-  el.innerHTML = `<strong>${title}</strong><p>${message}</p>`;
-}
-
-function hideMapError(panel) {
-  const el = document.getElementById(`map-${panel}-error`);
-  if (!el) return;
-  el.hidden = true;
-  el.innerHTML = '';
-}
-
-/** Classic callback loader — waits until google.maps.Map is actually usable. */
-function ensureMapsApi(apiKey) {
-  if (mapsReadyPromise) return mapsReadyPromise;
-
-  mapsReadyPromise = new Promise((resolve, reject) => {
-    if (window.google?.maps?.Map) {
-      resolve();
-      return;
-    }
-
-    const callbackName = '__mq9MapsReady';
-    window[callbackName] = () => {
-      delete window[callbackName];
-      if (window.google?.maps?.Map) {
-        resolve();
-      } else {
-        reject(new Error('Maps JS loaded but google.maps.Map is unavailable'));
-      }
-    };
-
-    const existing = document.getElementById(mapsScriptId);
-    if (existing) {
-      // Script already requested; wait for Map to appear.
-      const started = Date.now();
-      const poll = setInterval(() => {
-        if (window.google?.maps?.Map) {
-          clearInterval(poll);
-          resolve();
-        } else if (Date.now() - started > 15000) {
-          clearInterval(poll);
-          reject(new Error('Timed out waiting for Google Maps'));
-        }
-      }, 50);
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.id = mapsScriptId;
-    script.async = true;
-    script.defer = true;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=${callbackName}`;
-    script.onerror = () => {
-      delete window[callbackName];
-      reject(new Error('Maps script failed to load'));
-    };
-    document.head.appendChild(script);
-  }).catch((err) => {
-    mapsReadyPromise = null;
-    throw err;
-  });
-
-  return mapsReadyPromise;
 }
 
 /**
@@ -107,8 +46,13 @@ function initMap(panel, config) {
   const container = document.getElementById(`map-${panel}`);
   if (!container || mapsByPanel.has(panel)) return;
 
+  const center =
+    panel === 'select' && selection.getCenter()
+      ? selection.getCenter()
+      : config.defaults.center;
+
   const map = new google.maps.Map(container, {
-    center: config.defaults.center,
+    center,
     zoom: 12,
     mapTypeId: config.defaults.mapType,
     disableDefaultUI: false,
@@ -117,18 +61,26 @@ function initMap(panel, config) {
     fullscreenControl: true,
   });
 
-  new google.maps.Marker({
-    map,
-    position: config.defaults.center,
-    title: 'Phase 0 hardcoded center',
-  });
-
   mapsByPanel.set(panel, map);
   hideMapError(panel);
 
+  if (panel === 'select') {
+    selection.attachMap(map, config);
+  } else {
+    new google.maps.Marker({
+      map,
+      position: config.defaults.center,
+      title: 'Default center (Review arrives in Phase 4)',
+    });
+  }
+
   requestAnimationFrame(() => {
     google.maps.event.trigger(map, 'resize');
-    map.setCenter(config.defaults.center);
+    if (panel === 'select') {
+      selection.refit();
+    } else {
+      map.setCenter(config.defaults.center);
+    }
   });
 }
 
@@ -160,57 +112,32 @@ async function ensureMap(panel) {
   }
 }
 
-function setActiveTab(tabName) {
-  const tabs = document.querySelectorAll('.tab');
-  const panels = document.querySelectorAll('.panel');
-
-  tabs.forEach((tab) => {
-    const active = tab.dataset.tab === tabName;
-    tab.classList.toggle('is-active', active);
-    tab.setAttribute('aria-selected', active ? 'true' : 'false');
-  });
-
-  panels.forEach((panel) => {
-    const active = panel.id === `panel-${tabName}`;
-    panel.classList.toggle('is-active', active);
-    panel.hidden = !active;
-  });
-
+/**
+ * @param {'select' | 'review'} tabName
+ */
+function onTabActivate(tabName) {
   const map = mapsByPanel.get(tabName);
   if (map && window.google?.maps) {
     requestAnimationFrame(() => {
       google.maps.event.trigger(map, 'resize');
-      if (runtimeConfig) {
+      if (tabName === 'select') {
+        selection.refit();
+      } else if (runtimeConfig) {
         map.setCenter(runtimeConfig.defaults.center);
       }
     });
-  } else {
-    ensureMap(/** @type {'select' | 'review'} */ (tabName));
+    return;
   }
-}
-
-function wireTabs() {
-  document.querySelectorAll('.tab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      setActiveTab(tab.dataset.tab || 'select');
-    });
-  });
-}
-
-function fillSelectMeta(config) {
-  const { lat, lng } = config.defaults.center;
-  const centerEl = document.getElementById('select-center-label');
-  const typeEl = document.getElementById('select-map-type');
-  if (centerEl) centerEl.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-  if (typeEl) typeEl.textContent = config.defaults.mapType;
+  ensureMap(tabName);
 }
 
 async function boot() {
-  wireTabs();
+  wireTabs({ onActivate: onTabActivate });
+  selection.wireForms();
 
   try {
     runtimeConfig = await fetchConfig();
-    fillSelectMeta(runtimeConfig);
+    selection.fillDefaults(runtimeConfig);
     await ensureMap('select');
   } catch (err) {
     console.error(err);
