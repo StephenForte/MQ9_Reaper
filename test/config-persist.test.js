@@ -103,6 +103,37 @@ describe('ensureConfigSeeded (P7)', () => {
     assert.equal(seeded, false);
     assert.equal(loadAppConfig(target).radiusMiles, 9.5);
   });
+
+  it('reseeds when the target path is a directory', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mq9-seed-dir-'));
+    const target = path.join(dir, 'app-config.md');
+    fs.mkdirSync(target);
+    const seeded = ensureConfigSeeded(target);
+    assert.equal(seeded, true);
+    assert.equal(fs.statSync(target).isFile(), true);
+    const cfg = loadAppConfig(target);
+    assert.ok(cfg.maxSelections < cfg.dotCount);
+  });
+
+  it('reseeds when the target file is empty', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mq9-seed-empty-'));
+    const target = path.join(dir, 'app-config.md');
+    fs.writeFileSync(target, '', 'utf8');
+    const seeded = ensureConfigSeeded(target);
+    assert.equal(seeded, true);
+    const cfg = loadAppConfig(target);
+    assert.ok(cfg.maxSelections < cfg.dotCount);
+  });
+
+  it('reseeds when the target file is corrupt', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mq9-seed-corrupt-'));
+    const target = path.join(dir, 'app-config.md');
+    fs.writeFileSync(target, 'not valid frontmatter\n', 'utf8');
+    const seeded = ensureConfigSeeded(target);
+    assert.equal(seeded, true);
+    const cfg = loadAppConfig(target);
+    assert.ok(cfg.maxSelections < cfg.dotCount);
+  });
 });
 
 describe('bootstrapAppConfig (P7)', () => {
@@ -137,6 +168,66 @@ describe('bootstrapAppConfig (P7)', () => {
       );
       assert.equal(again.seeded, false);
       assert.equal(getAppConfig().radiusMiles, 11);
+    } finally {
+      setAppConfig(previous.config);
+      bootstrapAppConfig(
+        { CONFIG_PATH: previous.path },
+        { persistentDirExists: () => false }
+      );
+    }
+  });
+
+  it('recovers when CONFIG_PATH is a directory', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mq9-boot-dir-'));
+    const target = path.join(dir, 'app-config.md');
+    fs.mkdirSync(target);
+    const previous = {
+      path: getConfigPath(),
+      config: getAppConfig(),
+    };
+
+    try {
+      const boot = bootstrapAppConfig(
+        { CONFIG_PATH: target },
+        { persistentDirExists: () => false }
+      );
+      assert.equal(boot.seeded, true);
+      assert.equal(fs.statSync(target).isFile(), true);
+      assert.ok(getAppConfig().dotCount >= 2);
+    } finally {
+      setAppConfig(previous.config);
+      bootstrapAppConfig(
+        { CONFIG_PATH: previous.path },
+        { persistentDirExists: () => false }
+      );
+    }
+  });
+
+  it('recovers when CONFIG_PATH is empty or corrupt', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mq9-boot-bad-'));
+    const emptyTarget = path.join(dir, 'empty.md');
+    const corruptTarget = path.join(dir, 'corrupt.md');
+    fs.writeFileSync(emptyTarget, '', 'utf8');
+    fs.writeFileSync(corruptTarget, '---\nbogus: yes\n---\n', 'utf8');
+    const previous = {
+      path: getConfigPath(),
+      config: getAppConfig(),
+    };
+
+    try {
+      const emptyBoot = bootstrapAppConfig(
+        { CONFIG_PATH: emptyTarget },
+        { persistentDirExists: () => false }
+      );
+      assert.equal(emptyBoot.seeded, true);
+      assert.ok(getAppConfig().dotCount >= 2);
+
+      const corruptBoot = bootstrapAppConfig(
+        { CONFIG_PATH: corruptTarget },
+        { persistentDirExists: () => false }
+      );
+      assert.equal(corruptBoot.seeded, true);
+      assert.ok(getAppConfig().dotCount >= 2);
     } finally {
       setAppConfig(previous.config);
       bootstrapAppConfig(

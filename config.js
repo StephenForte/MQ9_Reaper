@@ -435,16 +435,48 @@ export function resolveConfigPath(env = process.env, opts = {}) {
 }
 
 /**
- * If target is missing, copy the repo seed (or seedPath) into place.
- * Does not overwrite an existing file (Admin owns the disk after first boot).
+ * True when targetPath is a regular file that parses as valid app config.
+ * Directories, empty files, and corrupt MD are treated as unusable.
+ *
+ * @param {string} targetPath
+ * @returns {boolean}
+ */
+function isUsableConfigFile(targetPath) {
+  try {
+    const stat = fs.statSync(targetPath);
+    if (!stat.isFile() || stat.size === 0) {
+      return false;
+    }
+    loadAppConfig(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * If target is missing or unusable, copy the repo seed (or seedPath) into place.
+ * Does not overwrite a valid existing file (Admin owns the disk after first boot).
+ * Unusable means: missing, a directory, empty, or corrupt / invalid frontmatter.
  *
  * @param {string} targetPath
  * @param {string} [seedPath]
  * @returns {boolean} true when a seed copy was written
  */
 export function ensureConfigSeeded(targetPath, seedPath = REPO_CONFIG_MD) {
-  if (fs.existsSync(targetPath)) {
+  if (isUsableConfigFile(targetPath)) {
     return false;
+  }
+
+  const resolvedTarget = path.resolve(targetPath);
+  const resolvedSeed = path.resolve(seedPath);
+  // Cannot recover the seed by copying onto itself; leave for loadAppConfig.
+  if (resolvedTarget === resolvedSeed) {
+    return false;
+  }
+
+  if (fs.existsSync(targetPath)) {
+    fs.rmSync(targetPath, { recursive: true, force: true });
   }
   const dir = path.dirname(targetPath);
   fs.mkdirSync(dir, { recursive: true });
