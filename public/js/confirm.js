@@ -11,6 +11,32 @@ export function confirmAction(message, opts = {}) {
     cancelLabel = 'Cancel',
   } = opts;
 
+  return chooseAction(message, {
+    title,
+    primaryLabel: confirmLabel,
+    cancelLabel,
+  }).then((choice) => choice === 'primary');
+}
+
+/**
+ * Three-way (or two-way) operator choice dialog.
+ * @param {string} message
+ * @param {{
+ *   title?: string,
+ *   primaryLabel?: string,
+ *   secondaryLabel?: string,
+ *   cancelLabel?: string,
+ * }} [opts]
+ * @returns {Promise<'primary' | 'secondary' | 'cancel'>}
+ */
+export function chooseAction(message, opts = {}) {
+  const {
+    title = 'Confirm',
+    primaryLabel = 'Continue',
+    secondaryLabel,
+    cancelLabel = 'Cancel',
+  } = opts;
+
   return new Promise((resolve) => {
     const existing = document.getElementById('app-confirm');
     if (existing) existing.remove();
@@ -44,11 +70,23 @@ export function confirmAction(message, opts = {}) {
     cancelBtn.className = 'btn';
     cancelBtn.textContent = cancelLabel;
 
+    /** @type {HTMLButtonElement | null} */
+    let secondaryBtn = null;
+    if (secondaryLabel) {
+      secondaryBtn = document.createElement('button');
+      secondaryBtn.type = 'button';
+      secondaryBtn.className = 'btn';
+      secondaryBtn.textContent = secondaryLabel;
+    }
+
     const okBtn = document.createElement('button');
     okBtn.type = 'button';
     okBtn.className = 'btn btn-primary';
-    okBtn.textContent = confirmLabel;
+    okBtn.textContent = primaryLabel;
 
+    /**
+     * @param {'primary' | 'secondary' | 'cancel'} value
+     */
     const finish = (value) => {
       root.remove();
       document.body.style.overflow = previousOverflow;
@@ -56,17 +94,27 @@ export function confirmAction(message, opts = {}) {
       resolve(value);
     };
 
-    const focusables = () => [cancelBtn, okBtn];
+    const focusables = () => {
+      /** @type {HTMLButtonElement[]} */
+      const nodes = [cancelBtn];
+      if (secondaryBtn) nodes.push(secondaryBtn);
+      nodes.push(okBtn);
+      return nodes;
+    };
 
     const onKey = (event) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        finish(false);
+        finish('cancel');
         return;
       }
       if (event.key === 'Enter' && document.activeElement !== cancelBtn) {
         event.preventDefault();
-        finish(true);
+        if (document.activeElement === secondaryBtn) {
+          finish('secondary');
+          return;
+        }
+        finish('primary');
         return;
       }
       if (event.key !== 'Tab') return;
@@ -85,14 +133,19 @@ export function confirmAction(message, opts = {}) {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    cancelBtn.addEventListener('click', () => finish(false));
-    okBtn.addEventListener('click', () => finish(true));
+    cancelBtn.addEventListener('click', () => finish('cancel'));
+    secondaryBtn?.addEventListener('click', () => finish('secondary'));
+    okBtn.addEventListener('click', () => finish('primary'));
     root.addEventListener('click', (event) => {
-      if (event.target === root) finish(false);
+      if (event.target === root) finish('cancel');
     });
     document.addEventListener('keydown', onKey);
 
-    actions.append(cancelBtn, okBtn);
+    if (secondaryBtn) {
+      actions.append(cancelBtn, secondaryBtn, okBtn);
+    } else {
+      actions.append(cancelBtn, okBtn);
+    }
     panel.append(heading, body, actions);
     root.append(panel);
     document.body.append(root);

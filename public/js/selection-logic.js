@@ -102,6 +102,31 @@ export function willLoseSelection(dots) {
   return selectedCount(dots) > 0;
 }
 
+/**
+ * Append a custom candidate at a map click. Auto-selects when under the max.
+ *
+ * @param {CandidateDot[]} dots
+ * @param {{ lat: number, lng: number, id?: string }} point
+ * @param {{ maxSelections: number, blockExtraSelections?: boolean }} opts
+ * @returns {{ dots: CandidateDot[], added: CandidateDot }}
+ */
+export function addCustomCandidate(dots, point, opts) {
+  const count = selectedCount(dots);
+  const selected = canSelectDot(count, opts.maxSelections, false, {
+    blockExtraSelections: opts.blockExtraSelections,
+  });
+  const customCount = dots.filter((dot) =>
+    String(dot.id).startsWith('custom-')
+  ).length;
+  const added = {
+    id: point.id || `custom-${customCount + 1}`,
+    lat: point.lat,
+    lng: point.lng,
+    selected,
+  };
+  return { dots: [...dots, added], added };
+}
+
 /** @type {Record<string, string>} */
 export const CENTER_SOURCE_LABELS = {
   default: 'Default',

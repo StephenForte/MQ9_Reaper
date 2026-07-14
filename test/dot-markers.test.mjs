@@ -25,7 +25,7 @@ describe('dot marker SVG urls', () => {
     assert.match(decodedSelected, /<circle/);
 
     const decodedSaved = decodeURIComponent(saved.split(',')[1]);
-    assert.match(decodedSaved, /#5b8def/);
+    assert.match(decodedSaved, /#d4a017/);
     assert.match(decodedSaved, /<polygon/);
   });
 });

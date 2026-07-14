@@ -1,4 +1,4 @@
-import { confirmAction } from './confirm.js';
+import { chooseAction, confirmAction } from './confirm.js';
 import { byId, byIdAs } from './dom.js';
 import { downloadJson, buildTargetsFilename } from './download.js';
 import { generateCandidateDots } from './dots.js';
@@ -12,6 +12,7 @@ import { fetchReverseGeocode } from './reverse-geocode.js';
 import { buildTargetFile, rowsFromSelectedDots } from './schema.js';
 import { wireSelectionForms } from './selection-forms.js';
 import {
+  addCustomCandidate,
   isValidSelection,
   labelForCenterSource,
   selectedCount,
@@ -197,6 +198,23 @@ export function createSelectionController() {
     updateSelectionUi();
   }
 
+  /**
+   * @param {CandidateDot} dot
+   */
+  function placeOneCandidateMarker(dot) {
+    if (!map) return;
+    const marker = new google.maps.Marker({
+      map,
+      position: { lat: dot.lat, lng: dot.lng },
+      title: dot.id,
+      icon: iconForDot(dot.selected),
+      zIndex: dot.selected ? 4 : 3,
+      optimized: false,
+    });
+    marker.addListener('click', () => onDotClick(dot.id));
+    markersById.set(dot.id, marker);
+  }
+
   function placeCandidateMarkers() {
     if (!map) return;
     for (const marker of markersById.values()) {
@@ -205,16 +223,48 @@ export function createSelectionController() {
     markersById.clear();
 
     for (const dot of candidates) {
-      const marker = new google.maps.Marker({
-        map,
-        position: { lat: dot.lat, lng: dot.lng },
-        title: dot.id,
-        icon: iconForDot(dot.selected),
-        zIndex: dot.selected ? 4 : 3,
-        optimized: false,
-      });
-      marker.addListener('click', () => onDotClick(dot.id));
-      markersById.set(dot.id, marker);
+      placeOneCandidateMarker(dot);
+    }
+  }
+
+  /**
+   * @param {import('./app-types.js').LatLng} point
+   */
+  function addCustomDotAt(point) {
+    if (!config) return;
+    const { max, blockExtra } = selectionLimits();
+    const result = addCustomCandidate(candidates, point, {
+      maxSelections: max,
+      blockExtraSelections: blockExtra,
+    });
+    candidates = result.dots;
+    setFieldError('candidates-error', '');
+    placeOneCandidateMarker(result.added);
+    updateSelectionUi();
+  }
+
+  /**
+   * Map click while candidates are loaded: custom target, recenter, or keep.
+   * @param {import('./app-types.js').LatLng} point
+   * @returns {Promise<void>}
+   */
+  async function onBlankMapClick(point) {
+    const choice = await chooseAction(
+      'Click was outside existing targets. Add a custom target here, recenter the area of interest, or leave the map unchanged.',
+      {
+        title: 'Map click',
+        primaryLabel: 'Add custom target',
+        secondaryLabel: 'Recenter',
+        cancelLabel: 'Keep current',
+      }
+    );
+
+    if (choice === 'primary') {
+      addCustomDotAt(point);
+      return;
+    }
+    if (choice === 'secondary') {
+      void setCenter(point, 'click', { skipConfirm: true });
     }
   }
 
@@ -350,10 +400,15 @@ export function createSelectionController() {
       if (!event.latLng) return;
       setFieldError('address-error', '');
       setFieldError('latlng-error', '');
-      void setCenter(
-        { lat: event.latLng.lat(), lng: event.latLng.lng() },
-        'click'
-      );
+      const point = {
+        lat: event.latLng.lat(),
+        lng: event.latLng.lng(),
+      };
+      if (candidates.length > 0) {
+        void onBlankMapClick(point);
+        return;
+      }
+      void setCenter(point, 'click');
     });
 
     void setCenter(

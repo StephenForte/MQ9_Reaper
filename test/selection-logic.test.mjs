@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  addCustomCandidate,
   canSelectDot,
   getSelectedDots,
   isValidSelection,
@@ -119,6 +120,46 @@ describe('willLoseSelection', () => {
     assert.equal(willLoseSelection(dotsFrom([{ selected: false }])), false);
     assert.equal(willLoseSelection(dotsFrom([{ selected: true }])), true);
     assert.equal(willLoseSelection([]), false);
+  });
+});
+
+describe('addCustomCandidate', () => {
+  it('appends a selected custom target when under max', () => {
+    const dots = dotsFrom([{ selected: true }]);
+    const result = addCustomCandidate(
+      dots,
+      { lat: 1.5, lng: 2.5 },
+      { maxSelections: 12 }
+    );
+    assert.equal(result.dots.length, 2);
+    assert.equal(result.added.id, 'custom-1');
+    assert.equal(result.added.lat, 1.5);
+    assert.equal(result.added.lng, 2.5);
+    assert.equal(result.added.selected, true);
+  });
+
+  it('adds unselected when at max and extras are blocked', () => {
+    const dots = dotsFrom([{ selected: true }]);
+    const result = addCustomCandidate(
+      dots,
+      { lat: 0, lng: 0 },
+      { maxSelections: 1, blockExtraSelections: true }
+    );
+    assert.equal(result.added.selected, false);
+    assert.equal(result.added.id, 'custom-1');
+  });
+
+  it('increments custom ids when customs already exist', () => {
+    const dots = [
+      ...dotsFrom([{ selected: false }]),
+      { id: 'custom-1', lat: 0, lng: 0, selected: false },
+    ];
+    const result = addCustomCandidate(
+      dots,
+      { lat: 3, lng: 4 },
+      { maxSelections: 12 }
+    );
+    assert.equal(result.added.id, 'custom-2');
   });
 });
 
