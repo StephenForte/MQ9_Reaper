@@ -1,16 +1,16 @@
 # MQ9 Reaper — Target Selection App
 
-Browser app for selecting and reviewing geographic points on a Google Maps satellite view. Full product scope: `target-selection-app-PRD.md`. Agent/contributor contract: `AGENTS.md`.
+Browser app for selecting and reviewing geographic points on a Google Maps hybrid view. Full product scope: `target-selection-app-PRD.md`. Agent/contributor contract: `AGENTS.md`.
 
-## Current phase: P6 — Admin config
+## Current phase: P7 — Persistent Admin config (v1 complete)
 
-- In-app **Admin** tab (hidden unless `ADMIN_USERNAME` and a 12+ char `ADMIN_PASSWORD` are set)
-- Login → HttpOnly session cookie (prefer `ADMIN_SESSION_SECRET`); edit runtime defaults; save writes `config/app-config.md` atomically
-- Login rate-limited (5/min/IP); timing-safe credential compare; `trust proxy` for Secure cookies on Render
-- After save: **Apply & reload** so this browser uses the new defaults
-- P7 planned: Render persistent disk so Admin edits survive redeploy
+- Render Blueprint uses **Starter** plan + a **1 GB persistent disk** mounted at `/var/data`
+- `CONFIG_PATH=/var/data/app-config.md` — Admin writes survive redeploy
+- First boot copies repo `config/app-config.md` onto the disk if missing; later Admin edits own that file
+- `/api/health` includes `configPersistent` for deploy smoke checks
+- Locally, leave `CONFIG_PATH` unset to use the repo config file
 
-Earlier phases (P0–P5) remain in force: Selection + Review flows, §8.3 errors, key-restriction checklist.
+Earlier phases (P0–P6) remain in force: Selection + Review + Admin, §8.3 errors, key-restriction checklist.
 
 ## Local setup
 
@@ -38,6 +38,7 @@ cp .env.example .env
 | `ADMIN_USERNAME` | Shared admin username |
 | `ADMIN_PASSWORD` | ≥12 characters or Admin stays disabled |
 | `ADMIN_SESSION_SECRET` | ≥16 characters recommended; signs session cookies |
+| `CONFIG_PATH` | Optional absolute path to runtime config MD (Render sets this via Blueprint) |
 
 Then:
 
@@ -90,21 +91,25 @@ On desktop Chrome, Firefox, and Safari (latest):
 ## Deploy on Render
 
 1. Push this repo to GitHub.
-2. Create a **Web Service** (or use Blueprint with `render.yaml`).
+2. Create a **Web Service** from Blueprint (`render.yaml`) — **Starter** plan with disk at `/var/data`.
 3. Set:
    - `GOOGLE_MAPS_API_KEY` — referrer-restrict to your Render domain + Maps JavaScript API
    - `GEOCODING_API_KEY` — Geocoding API only; IP-restrict to Render egress when practical
    - `ADMIN_USERNAME` / `ADMIN_PASSWORD` (≥12 chars) — required to enable the Admin tab
    - `ADMIN_SESSION_SECRET` (≥16 chars) — recommended; signs Admin session cookies
-4. Deploy, then run the key-restriction checks against the live URL (`/api/health?probe=geocode`).
+   - `CONFIG_PATH` is already set by Blueprint to `/var/data/app-config.md`
+4. Deploy, then smoke-check:
+   - `/api/health` → `configPersistent: true`
+   - `/api/health?probe=geocode` for key checks
+5. After Admin save + Apply & reload, redeploy once and confirm defaults still match.
 
-**Note:** Admin saves write `config/app-config.md` on the instance filesystem. Without a persistent disk (P7), those edits may be lost on redeploy/restart.
+**Note:** Without the persistent disk (or without `CONFIG_PATH` pointing at it), Admin writes land on the ephemeral filesystem and can be lost on redeploy. Blueprint includes the disk by default.
 
 ## API
 
 | Route | Purpose |
 |-------|---------|
-| `GET /api/health` | Liveness + whether Maps/geocoding/Admin credentials are configured |
+| `GET /api/health` | Liveness + Maps/geocoding/Admin + `configPersistent` |
 | `GET /api/health?probe=geocode` | Same + live geocode smoke (`geocodingProbe`) — not used by Render health checks |
 | `GET /api/config` | Public Maps key + defaults + `adminConfigured` (never geocoding key) |
 | `GET /api/geocode?q=` | Proxies Google Geocoding → lat/lng + address metadata |
@@ -119,17 +124,17 @@ On desktop Chrome, Firefox, and Safari (latest):
 
 ```
 server.js              Express: static + health/config/geocode/admin (ESM)
-config.js              Loads/writes config/app-config.md
-config/app-config.md   Editable defaults (radius, counts, mapType, …)
+config.js              Loads/writes/seeds app-config.md (P7 path resolve)
+config/app-config.md   Repo seed + local defaults (radius, counts, mapType, …)
 lib/geocode.js         Geocode proxy helper
 lib/admin-session.js   Admin session cookie helpers
 public/
   index.html           Selection / Review / Admin UI
   css/app.css
   js/                  ES modules (app, selection, review, admin, schema, …)
-test/                  node:test (…, admin, api, config, …)
-render.yaml            Render Blueprint
+test/                  node:test (…, config-persist, admin, api, …)
+render.yaml            Render Blueprint (Starter + disk)
 AGENTS.md              Coding / phase standards
 ```
 
-Tune product knobs in Admin (preferred) or by editing `config/app-config.md` and restarting.
+Tune product knobs in Admin (preferred) or by editing the active config file and restarting.

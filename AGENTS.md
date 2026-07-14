@@ -14,14 +14,14 @@ Work one phase at a time. Do not pull later-phase UI into earlier ones.
 |-------|------|----------|--------------|
 | **P0** | Deployable shell | Express static + `/api/config`, two tabs, Maps loads | Location forms, dots, export |
 | **P1** | Location + map | Address (proxy), map click, lat/long, radius circle, `fitBounds`, MD config | Dots, selection, export |
-| **P2** | Dots + selection | Uniform-disk generation via **Load dots**, toggle select, exact-N gate, confirm when ≥1 selected | Metadata form, JSON export |
+| **P2** | Dots + selection | Uniform-disk generation via **Load targets**, toggle select, min–max gate, confirm when ≥1 selected | Metadata form, JSON export |
 | **P3** | Annotate + export | Targeting list, validation, client JSON download (§4 schema) | Review upload |
 | **P4** | Review | Upload, schema validate, re-render, info windows | Editing / re-export |
 | **P5** | Harden | §8.3 errors, browser pass, key-restriction check | New features |
 | **P6** | Admin config | In-app edit of §6 params; gate with `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Broad auth/product admin |
-| **P7** | Persist Admin | Render persistent disk (or equivalent) so MD writes survive redeploy | New product features |
+| **P7** | Persist Admin | Render persistent disk so Admin MD writes survive redeploy | New product features |
 
-Exit criteria are in the PRD §9. Demo each phase before expanding scope.
+Exit criteria are in the PRD §9. Demo each phase before expanding scope. **P0–P7 are complete for v1.**
 
 ## Architecture rules
 
@@ -31,19 +31,21 @@ Exit criteria are in the PRD §9. Demo each phase before expanding scope.
   - `GEOCODING_API_KEY` — server only. Never send to the client. Restrict by IP + Geocoding API.
   - `ADMIN_USERNAME` / `ADMIN_PASSWORD` — gate Admin tab + `/api/admin/*`. Password must be ≥12 chars. Both required or Admin stays hidden.
   - `ADMIN_SESSION_SECRET` — recommended (≥16 chars); signs Admin session cookies. If omitted, a password-derived key is used with a warning.
+  - `CONFIG_PATH` — optional absolute path to the runtime config MD. Render Blueprint sets `/var/data/app-config.md` on the persistent disk.
   - Never commit `.env`.
-- **Persistence:** Client download/upload of target JSON only. Config defaults live in `config/app-config.md` (P6 Admin writes the same file). Render disk is ephemeral until P7 — Admin edits may be lost on redeploy.
-- **Config defaults:** Edit `config/app-config.md` (YAML frontmatter) or use Admin. `config.js` loads/validates/serializes it. Keep invariant `minSelections ≤ maxSelections < dotCount`. Do not invent a second config store.
+- **Persistence:** Client download/upload of target JSON only. Config defaults: repo `config/app-config.md` is the seed; on Render, Admin writes the persistent-disk copy (`CONFIG_PATH` / `/var/data/app-config.md`). First boot seeds the disk from the repo file if missing.
+- **Config defaults:** Edit `config/app-config.md` (YAML frontmatter) or use Admin. `config.js` loads/validates/serializes it (`bootstrapAppConfig` / `resolveConfigPath`). Keep invariant `minSelections ≤ maxSelections < dotCount`. Do not invent a second config store.
 - **Maps:** Default `mapType` is `hybrid`.
 - **Recenter:** When `confirmOnRecenter` is true and ≥1 candidate is selected, prompt before center/radius change or Reload targets.
 - **Targets (P2/P3):** Operator clicks **Load targets** (no auto-scatter). Use `public/js/dots.js` — uniform disk + `minDotSpacingMeters` rejection (close ok, overlap not). Center/radius change clears candidates until Load again. Selection requires `minSelections`–`maxSelections` (default 1–12). When `blockExtraSelections` is true (default), selecting above max is blocked; when false, extras are allowed but Save stays gated to the range.
-- **Admin (P6):** Login form → HttpOnly session cookie (HMAC via `ADMIN_SESSION_SECRET` or password-derived fallback). Password ≥12 chars. Timing-safe credential compare; 5 logins/min/IP. Atomic MD writes. `trust proxy` for Secure cookies on Render. After save, **Apply & reload**. No OAuth.
+- **Admin (P6/P7):** Login form → HttpOnly session cookie (HMAC via `ADMIN_SESSION_SECRET` or password-derived fallback). Password ≥12 chars. Timing-safe credential compare; 5 logins/min/IP. Atomic MD writes. `trust proxy` for Secure cookies on Render. After save, **Apply & reload**. No OAuth. Render Blueprint: `plan: starter` + disk at `/var/data`.
+
 ## Repo layout
 
 ```
-server.js                 Express entry: static + API routes (ESM)
-config.js                 Loads/writes config/app-config.md → app config
-config/app-config.md      Human-editable runtime defaults
+server.js                 Express entry: static + API routes (ESM); bootstraps config path
+config.js                 Loads/writes/seeds app-config.md → app config (P7 path resolve)
+config/app-config.md      Repo seed + local runtime defaults
 lib/geocode.js            Geocoding proxy helper (server)
 lib/admin-session.js      Admin session cookie sign/verify + auth gates
 lib/login-rate-limit.js   In-memory Admin login rate limiter
@@ -53,7 +55,7 @@ public/
   js/
     app.js                Boot / map lifecycle
     app-types.js          Shared AppConfig typedef
-    admin.js              Admin tab login + config editor (P6)
+    admin.js              Admin tab login + config editor
     selection.js          Selection-tab center, radius, candidates, export
     selection-forms.js    Selection location / radius form wiring
     selection-logic.js    Pure selection helpers (testable)
@@ -73,8 +75,8 @@ public/
     constants.js          Miles/meters constants
     dom.js                Small DOM helpers
     ui.js                 Field/map/status helpers
-test/                     node:test (dots, geo, selection-logic, schema, review-logic, config, geocode, api, admin, ui, dom, markers, …)
-render.yaml               Render Blueprint
+test/                     node:test (…, config-persist, admin, api, …)
+render.yaml               Render Blueprint (Starter + persistent disk)
 target-selection-app-PRD.md
 ```
 
@@ -83,7 +85,7 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 ## Coding standards
 
 - **Stack:** Plain HTML/CSS/JS (ES modules) + Express. No React/framework unless explicitly requested.
-- **Match existing style:** CSS variables in `:root`, Barlow + IBM Plex Mono, operational dark UI already in the app — extend it; don't redesign.
+- **Match existing style:** CSS variables in `:root`, Barlow + IBM Plex Mono, operational dark UI — extend it; don't invent a second visual language.
 - **Comments:** Only explain non-obvious PRD/behavior ties (e.g. §5.3 disk sampling). No narrating obvious code.
 - **Errors:** Inline field errors for forms; blocking overlay for map-load failures. Prefer clear operator language from PRD §8.3.
 - **XSS:** Build error UI with `textContent` / `replaceChildren`, not string `innerHTML` for dynamic text.
@@ -96,7 +98,7 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 
 | Route | Returns |
 |-------|---------|
-| `GET /api/health` | `{ ok, mapsKeyConfigured, geocodingConfigured, adminConfigured }` (+ optional `geocodingProbe` when `?probe=geocode`) |
+| `GET /api/health` | `{ ok, mapsKeyConfigured, geocodingConfigured, adminConfigured, configPersistent }` (+ optional `geocodingProbe` when `?probe=geocode`) |
 | `GET /api/config` | `{ mapsApiKey, adminConfigured, defaults }` — never geocoding key |
 | `GET /api/geocode?q=` | `{ lat, lng, formattedAddress, addressComponents, types }` or error JSON |
 | `GET /api/geocode/reverse?lat=&lng=` | Reverse geocode payload for region / place names |
@@ -113,19 +115,19 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 3. Selection count: at least `minSelections`, at most `maxSelections` (defaults 1–12). Selecting above max is blocked when `blockExtraSelections` is true (default).
 4. Dots may be close but must not overlap; `minDotSpacingMeters` (default 50) via rejection sampling (Q4).
 5. Confirm on recenter when ≥1 candidate is selected (`confirmOnRecenter`). Targets load only via **Load targets**.
-6. Config via `config/app-config.md`; Admin in P6 writes the same file (Q6).
+6. Config via `config/app-config.md`; Admin in P6 writes the same logical config (Q6).
 7. `hybrid` default map type (Q7).
 8. Review shows metadata on marker click (Q8 — P4). Invalid Review uploads clear the previous render (P5).
 9. Unseeded RNG; export `seed: null` (Q9).
 10. Miles only in v1 (Q10).
 11. P6 Admin auth = simple `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars.
 12. Default annotation on Save Targets: place/address name when reverse-geocode finds one, else `{Region} Target N`; confidence `1`; priority `medium`. Show a non-blocking notice if reverse geocode fails.
-13. P6 Apply & reload after save; P7 for Render persistent disk.
+13. P6 Apply & reload after save; P7 Render persistent disk at `/var/data` with `CONFIG_PATH`, first-boot seed from repo.
 
 ## Local checklist
 
 ```bash
-cp .env.example .env   # set Maps + geocoding keys; optional ADMIN_*
+cp .env.example .env   # set Maps + geocoding keys; optional ADMIN_* / CONFIG_PATH
 npm install
 npm test
 npm start              # http://localhost:3000

@@ -4,11 +4,33 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * Loads human-editable defaults from config/app-config.md (YAML frontmatter).
- * Admin UI (PRD P6) writes the same file.
+ * Admin UI writes the same file. On Render (P7), CONFIG_PATH points at the
+ * persistent disk; first boot seeds from the repo copy.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const CONFIG_MD = path.join(__dirname, 'config', 'app-config.md');
+
+/** Repo seed / local default — checked into git. */
+export const REPO_CONFIG_MD = path.join(__dirname, 'config', 'app-config.md');
+
+/** Render Blueprint mounts the persistent disk here (see render.yaml). */
+export const DEFAULT_PERSISTENT_DIR = '/var/data';
+export const DEFAULT_PERSISTENT_CONFIG = path.join(
+  DEFAULT_PERSISTENT_DIR,
+  'app-config.md'
+);
+
+/** @deprecated Prefer getConfigPath() after bootstrapAppConfig(). Alias of REPO_CONFIG_MD for older imports. */
+export const CONFIG_MD = REPO_CONFIG_MD;
+
+/** @type {string} */
+let activeConfigPath = REPO_CONFIG_MD;
+
+/** @type {boolean} */
+let activeConfigPersistent = false;
+
+/** @type {AppConfigValue | null} */
+let runtimeAppConfig = null;
 
 /**
  * @typedef {{
@@ -360,10 +382,104 @@ export function defaultsForClient(config) {
 }
 
 /**
+ * Absolute path currently used for load/write (after bootstrap).
+ */
+export function getConfigPath() {
+  return activeConfigPath;
+}
+
+/**
+ * True when the active path is not the repo seed (e.g. Render disk / CONFIG_PATH).
+ */
+export function isConfigPersistent() {
+  return activeConfigPersistent;
+}
+
+/**
+ * Resolve where Admin writes live.
+ * Priority: CONFIG_PATH env → /var/data when that dir exists → repo file.
+ *
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} [env]
+ * @param {{ persistentDirExists?: (dir: string) => boolean }} [opts]
+ * @returns {{ path: string, persistent: boolean, source: 'env' | 'disk' | 'repo' }}
+ */
+export function resolveConfigPath(env = process.env, opts = {}) {
+  const dirExists =
+    opts.persistentDirExists ||
+    ((dir) => {
+      try {
+        return fs.existsSync(dir) && fs.statSync(dir).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+
+  const fromEnv =
+    typeof env.CONFIG_PATH === 'string' ? env.CONFIG_PATH.trim() : '';
+  if (fromEnv) {
+    const resolved = path.resolve(fromEnv);
+    const persistent =
+      path.resolve(resolved) !== path.resolve(REPO_CONFIG_MD);
+    return { path: resolved, persistent, source: 'env' };
+  }
+
+  if (dirExists(DEFAULT_PERSISTENT_DIR)) {
+    return {
+      path: DEFAULT_PERSISTENT_CONFIG,
+      persistent: true,
+      source: 'disk',
+    };
+  }
+
+  return { path: REPO_CONFIG_MD, persistent: false, source: 'repo' };
+}
+
+/**
+ * If target is missing, copy the repo seed (or seedPath) into place.
+ * Does not overwrite an existing file (Admin owns the disk after first boot).
+ *
+ * @param {string} targetPath
+ * @param {string} [seedPath]
+ * @returns {boolean} true when a seed copy was written
+ */
+export function ensureConfigSeeded(targetPath, seedPath = REPO_CONFIG_MD) {
+  if (fs.existsSync(targetPath)) {
+    return false;
+  }
+  const dir = path.dirname(targetPath);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.copyFileSync(seedPath, targetPath);
+  return true;
+}
+
+/**
+ * Resolve path, seed if needed, load into memory. Call once at process start.
+ *
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} [env]
+ * @param {{ persistentDirExists?: (dir: string) => boolean }} [opts]
+ * @returns {{ path: string, persistent: boolean, source: 'env' | 'disk' | 'repo', seeded: boolean }}
+ */
+export function bootstrapAppConfig(env = process.env, opts = {}) {
+  const resolved = resolveConfigPath(env, opts);
+  const seeded = ensureConfigSeeded(resolved.path);
+  activeConfigPath = resolved.path;
+  activeConfigPersistent = resolved.persistent;
+  runtimeAppConfig = loadAppConfig(activeConfigPath);
+  return { ...resolved, seeded };
+}
+
+function ensureRuntimeLoaded() {
+  if (!runtimeAppConfig) {
+    runtimeAppConfig = loadAppConfig(getConfigPath());
+  }
+  return runtimeAppConfig;
+}
+
+/**
  * @param {string} [filePath]
  * @returns {AppConfigValue}
  */
-export function loadAppConfig(filePath = CONFIG_MD) {
+export function loadAppConfig(filePath = getConfigPath()) {
   const text = fs.readFileSync(filePath, 'utf8');
   return toAppConfig(parseFrontmatter(text));
 }
@@ -373,7 +489,7 @@ export function loadAppConfig(filePath = CONFIG_MD) {
  * @param {{ path?: string, existingText?: string }} [opts]
  */
 export function writeAppConfig(config, opts = {}) {
-  const filePath = opts.path || CONFIG_MD;
+  const filePath = opts.path || getConfigPath();
   const existingText =
     opts.existingText !== undefined
       ? opts.existingText
@@ -382,6 +498,7 @@ export function writeAppConfig(config, opts = {}) {
         : '';
   const text = buildConfigMarkdown(config, existingText);
   const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
   const tmp = path.join(
     dir,
     `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`
@@ -406,11 +523,8 @@ export function writeAppConfig(config, opts = {}) {
   return text;
 }
 
-/** @type {AppConfigValue} */
-let runtimeAppConfig = loadAppConfig();
-
 export function getAppConfig() {
-  return runtimeAppConfig;
+  return ensureRuntimeLoaded();
 }
 
 /**
@@ -423,10 +537,9 @@ export function setAppConfig(config) {
 /**
  * @param {string} [filePath]
  */
-export function reloadAppConfig(filePath = CONFIG_MD) {
+export function reloadAppConfig(filePath = getConfigPath()) {
   runtimeAppConfig = loadAppConfig(filePath);
   return runtimeAppConfig;
 }
 
-/** Prefer getAppConfig() so Admin saves are visible to new createApp() calls. */
-export const appConfig = getAppConfig();
+ensureRuntimeLoaded();

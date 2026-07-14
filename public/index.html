@@ -16,10 +16,12 @@
     <div class="app">
       <header class="app-header">
         <div class="brand">
-          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-mark" aria-hidden="true">
+            <span class="brand-mark-core"></span>
+          </span>
           <div class="brand-text">
             <p class="brand-name">MQ9 Reaper</p>
-            <p class="brand-sub">Target Selection</p>
+            <p class="brand-sub">Map target selection</p>
           </div>
         </div>
         <nav class="tabs" role="tablist" aria-label="Main">
@@ -33,7 +35,8 @@
             data-tab="select"
             tabindex="0"
           >
-            Target Selection
+            <span class="tab-index" aria-hidden="true">01</span>
+            <span class="tab-label">Target Selection</span>
           </button>
           <button
             type="button"
@@ -45,7 +48,8 @@
             data-tab="review"
             tabindex="-1"
           >
-            Upload to Reaper
+            <span class="tab-index" aria-hidden="true">02</span>
+            <span class="tab-label">Upload to Reaper</span>
           </button>
           <button
             type="button"
@@ -58,7 +62,8 @@
             tabindex="-1"
             hidden
           >
-            Admin
+            <span class="tab-index" aria-hidden="true">03</span>
+            <span class="tab-label">Admin</span>
           </button>
         </nav>
       </header>
@@ -71,15 +76,24 @@
           aria-labelledby="tab-select"
         >
           <aside class="side-panel">
-            <h2 class="side-title">Location</h2>
-            <p class="side-copy">
-              Set the center, apply a radius, load candidate targets, then
-              shortlist within the configured min–max range and annotate for
-              download.
-            </p>
+            <div class="side-intro">
+              <h2 class="side-title">Target Selection</h2>
+              <p class="side-copy">
+                Pin a center, set the radius, load candidates, shortlist, then
+                annotate and download JSON.
+              </p>
+              <ol class="workflow" aria-label="Selection workflow">
+                <li>Center</li>
+                <li>Radius</li>
+                <li>Load &amp; select</li>
+                <li>Annotate</li>
+              </ol>
+            </div>
 
             <section class="side-section" aria-labelledby="center-heading">
-              <h3 id="center-heading" class="side-section-title">Center</h3>
+              <h3 id="center-heading" class="side-section-title">
+                <span class="step-num">1</span> Center
+              </h3>
               <p class="hint">Use one method — the latest wins.</p>
 
               <form id="form-address" class="loc-form" novalidate>
@@ -126,11 +140,15 @@
                 <p id="latlng-error" class="field-error" role="alert" hidden></p>
               </form>
 
-              <p class="hint hint-tight">Or click the map to drop the center pin.</p>
+              <p class="hint hint-tight hint-callout">
+                Or click the map to drop the center pin.
+              </p>
             </section>
 
             <section class="side-section" aria-labelledby="radius-heading">
-              <h3 id="radius-heading" class="side-section-title">Radius</h3>
+              <h3 id="radius-heading" class="side-section-title">
+                <span class="step-num">2</span> Radius
+              </h3>
               <form id="form-radius" class="loc-form loc-form-compact" novalidate>
                 <div class="field-row field-row-apply">
                   <label class="field">
@@ -154,12 +172,12 @@
 
             <section class="side-section" aria-labelledby="candidates-heading">
               <h3 id="candidates-heading" class="side-section-title">
-                Target selection
+                <span class="step-num">3</span> Load &amp; select
               </h3>
               <p class="hint">
-                Load targets inside the radius, then click markers to select or
-                deselect. Reload replaces the set (confirms if you already have
-                a selection).
+                Load targets inside the radius, then click markers to select.
+                Reload replaces the set (confirms if you already have a
+                selection).
               </p>
               <div class="candidates-actions">
                 <button
@@ -173,7 +191,7 @@
                 </button>
                 <button
                   type="button"
-                  class="btn btn-primary"
+                  class="btn btn-accent"
                   id="btn-save-targets"
                   disabled
                   aria-describedby="candidates-status"
@@ -201,11 +219,11 @@
               hidden
             >
               <h3 id="targeting-heading" class="side-section-title">
-                Targeting list
+                <span class="step-num">4</span> Annotate &amp; download
               </h3>
               <p class="hint">
-                After Save Targets: name each row, set confidence (1–5) and
-                priority, then Download JSON.
+                Name each row, set confidence (1–5) and priority, then Download
+                JSON.
               </p>
               <p
                 id="targeting-place-notice"
@@ -222,7 +240,7 @@
               <div id="targeting-list" class="targeting-list"></div>
               <button
                 type="button"
-                class="btn btn-primary btn-block"
+                class="btn btn-accent btn-block"
                 id="btn-download-json"
                 disabled
               >
@@ -232,7 +250,7 @@
               <p id="targeting-success" class="hint hint-success hint-tight" hidden></p>
             </section>
 
-            <dl class="meta-list">
+            <dl class="meta-list status-dock" aria-label="Current selection status">
               <div>
                 <dt>Center</dt>
                 <dd id="select-center-label">—</dd>
@@ -252,6 +270,7 @@
             </dl>
           </aside>
           <div class="map-stage">
+            <div class="map-frame" aria-hidden="true"></div>
             <div
               id="map-select"
               class="map"
@@ -270,17 +289,20 @@
           hidden
         >
           <aside class="side-panel">
-            <h2 class="side-title">Review</h2>
-            <p class="side-copy">
-              Upload a saved targets JSON to re-render the original center,
-              radius, and annotated points. Read-only — no editing or re-export.
-            </p>
+            <div class="side-intro">
+              <h2 class="side-title">Upload to Reaper</h2>
+              <p class="side-copy">
+                Load a saved targets JSON to re-render the original center,
+                radius, and annotated points. Read-only — no editing or
+                re-export.
+              </p>
+            </div>
 
             <section class="side-section" aria-labelledby="review-upload-heading">
               <h3 id="review-upload-heading" class="side-section-title">
                 Upload
               </h3>
-              <label class="field">
+              <label class="field field-file">
                 <span class="field-label">Targets JSON</span>
                 <input
                   id="input-review-file"
@@ -294,7 +316,9 @@
                 load.
               </p>
               <p id="review-error" class="field-error" role="alert" hidden></p>
-              <p id="review-status" class="hint hint-tight">No file loaded.</p>
+              <p id="review-status" class="hint hint-tight empty-state">
+                No file loaded yet.
+              </p>
             </section>
 
             <section
@@ -350,6 +374,7 @@
             </section>
           </aside>
           <div class="map-stage">
+            <div class="map-frame" aria-hidden="true"></div>
             <div
               id="map-review"
               class="map"
@@ -368,17 +393,18 @@
           hidden
         >
           <aside class="side-panel side-panel-admin">
-            <h2 class="side-title">Admin</h2>
-            <p class="side-copy">
-              Edit runtime defaults (radius, counts, map type, selection gating,
-              spacing, confirm-on-recenter, default center). Changes write to
-              <code class="inline-code">config/app-config.md</code>. After save,
-              use Apply &amp; reload so this browser picks them up.
-            </p>
+            <div class="side-intro">
+              <h2 class="side-title">Admin</h2>
+              <p class="side-copy">
+                Tune runtime defaults (radius, counts, map type, selection
+                gating, spacing, confirm-on-recenter, default center). After
+                save, use Apply &amp; reload so this browser picks them up.
+              </p>
+            </div>
 
             <section
               id="admin-login-section"
-              class="side-section"
+              class="side-section admin-card"
               aria-labelledby="admin-login-heading"
             >
               <h3 id="admin-login-heading" class="side-section-title">
@@ -418,7 +444,7 @@
 
             <section
               id="admin-editor-section"
-              class="side-section"
+              class="side-section admin-card"
               aria-labelledby="admin-config-heading"
               hidden
             >
@@ -430,118 +456,124 @@
                   Log out
                 </button>
               </div>
-              <p id="admin-persist-note" class="hint hint-warn hint-tight" hidden></p>
 
               <form id="form-admin-config" class="loc-form" novalidate>
-                <label class="field">
-                  <span class="field-label">Default radius (miles)</span>
-                  <input
-                    id="admin-radiusMiles"
-                    name="radiusMiles"
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    required
-                  />
-                </label>
-                <div class="field-row">
+                <fieldset class="admin-fieldset">
+                  <legend>Area &amp; map</legend>
                   <label class="field">
-                    <span class="field-label">Dot count</span>
+                    <span class="field-label">Default radius (miles)</span>
                     <input
-                      id="admin-dotCount"
-                      name="dotCount"
+                      id="admin-radiusMiles"
+                      name="radiusMiles"
                       type="number"
-                      min="2"
-                      step="1"
+                      min="0.1"
+                      step="0.1"
                       required
                     />
                   </label>
                   <label class="field">
-                    <span class="field-label">Min spacing (m)</span>
-                    <input
-                      id="admin-minDotSpacingMeters"
-                      name="minDotSpacingMeters"
-                      type="number"
-                      min="0"
-                      step="1"
-                      required
-                    />
+                    <span class="field-label">Map type</span>
+                    <select id="admin-mapType" name="mapType">
+                      <option value="hybrid">hybrid</option>
+                      <option value="satellite">satellite</option>
+                    </select>
                   </label>
-                </div>
-                <div class="field-row">
+                  <div class="field-row">
+                    <label class="field">
+                      <span class="field-label">Default center lat</span>
+                      <input
+                        id="admin-defaultCenterLat"
+                        name="defaultCenterLat"
+                        type="number"
+                        min="-90"
+                        max="90"
+                        step="any"
+                        required
+                      />
+                    </label>
+                    <label class="field">
+                      <span class="field-label">Default center lng</span>
+                      <input
+                        id="admin-defaultCenterLng"
+                        name="defaultCenterLng"
+                        type="number"
+                        min="-180"
+                        max="180"
+                        step="any"
+                        required
+                      />
+                    </label>
+                  </div>
+                </fieldset>
+
+                <fieldset class="admin-fieldset">
+                  <legend>Candidates &amp; selection</legend>
+                  <div class="field-row">
+                    <label class="field">
+                      <span class="field-label">Dot count</span>
+                      <input
+                        id="admin-dotCount"
+                        name="dotCount"
+                        type="number"
+                        min="2"
+                        step="1"
+                        required
+                      />
+                    </label>
+                    <label class="field">
+                      <span class="field-label">Min spacing (m)</span>
+                      <input
+                        id="admin-minDotSpacingMeters"
+                        name="minDotSpacingMeters"
+                        type="number"
+                        min="0"
+                        step="1"
+                        required
+                      />
+                    </label>
+                  </div>
+                  <div class="field-row">
+                    <label class="field">
+                      <span class="field-label">Min selections</span>
+                      <input
+                        id="admin-minSelections"
+                        name="minSelections"
+                        type="number"
+                        min="1"
+                        step="1"
+                        required
+                      />
+                    </label>
+                    <label class="field">
+                      <span class="field-label">Max selections</span>
+                      <input
+                        id="admin-maxSelections"
+                        name="maxSelections"
+                        type="number"
+                        min="1"
+                        step="1"
+                        required
+                      />
+                    </label>
+                  </div>
+                  <p class="hint hint-tight">
+                    Invariant: min ≤ max &lt; dot count.
+                  </p>
                   <label class="field">
-                    <span class="field-label">Min selections</span>
-                    <input
-                      id="admin-minSelections"
-                      name="minSelections"
-                      type="number"
-                      min="1"
-                      step="1"
-                      required
-                    />
+                    <span class="field-label">Block extras above max</span>
+                    <select id="admin-blockExtraSelections" name="blockExtraSelections">
+                      <option value="true">true — block selecting above max</option>
+                      <option value="false">false — allow extras; Save still gated</option>
+                    </select>
                   </label>
                   <label class="field">
-                    <span class="field-label">Max selections</span>
-                    <input
-                      id="admin-maxSelections"
-                      name="maxSelections"
-                      type="number"
-                      min="1"
-                      step="1"
-                      required
-                    />
+                    <span class="field-label">Confirm on recenter</span>
+                    <select id="admin-confirmOnRecenter" name="confirmOnRecenter">
+                      <option value="true">true — prompt when selection would clear</option>
+                      <option value="false">false — change without prompt</option>
+                    </select>
                   </label>
-                </div>
-                <p class="hint hint-tight">
-                  Invariant: min ≤ max &lt; dot count.
-                </p>
-                <label class="field">
-                  <span class="field-label">Block extras above max</span>
-                  <select id="admin-blockExtraSelections" name="blockExtraSelections">
-                    <option value="true">true — block selecting above max</option>
-                    <option value="false">false — allow extras; Save still gated</option>
-                  </select>
-                </label>
-                <label class="field">
-                  <span class="field-label">Map type</span>
-                  <select id="admin-mapType" name="mapType">
-                    <option value="hybrid">hybrid</option>
-                    <option value="satellite">satellite</option>
-                  </select>
-                </label>
-                <label class="field">
-                  <span class="field-label">Confirm on recenter</span>
-                  <select id="admin-confirmOnRecenter" name="confirmOnRecenter">
-                    <option value="true">true — prompt when selection would clear</option>
-                    <option value="false">false — change without prompt</option>
-                  </select>
-                </label>
-                <div class="field-row">
-                  <label class="field">
-                    <span class="field-label">Default center lat</span>
-                    <input
-                      id="admin-defaultCenterLat"
-                      name="defaultCenterLat"
-                      type="number"
-                      min="-90"
-                      max="90"
-                      step="any"
-                      required
-                    />
-                  </label>
-                  <label class="field">
-                    <span class="field-label">Default center lng</span>
-                    <input
-                      id="admin-defaultCenterLng"
-                      name="defaultCenterLng"
-                      type="number"
-                      min="-180"
-                      max="180"
-                      step="any"
-                      required
-                    />
-                  </label>
-                </div>
+                </fieldset>
 
                 <dl class="meta-list admin-readonly">
                   <div>
@@ -564,7 +596,7 @@
                   </button>
                   <button
                     type="button"
-                    class="btn btn-primary"
+                    class="btn btn-accent"
                     id="btn-admin-apply"
                     disabled
                   >
