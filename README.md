@@ -1,14 +1,15 @@
 # MQ9 Reaper — Target Selection App
 
-Two-tab web app for selecting and reviewing geographic points on a Google Maps satellite view. Full product scope: `target-selection-app-PRD.md`. Agent/contributor contract: `AGENTS.md`.
+Browser app for selecting and reviewing geographic points on a Google Maps satellite view. Full product scope: `target-selection-app-PRD.md`. Agent/contributor contract: `AGENTS.md`.
 
-## Current phase: P5 — Hardening
+## Current phase: P6 — Admin config
 
-- §8.3 error paths (address, lat/long, selection gating, targeting, JSON upload, geocode/Maps failures)
-- Config MD validation messages with field names; `blockExtraSelections` tunable
-- Key-restriction checklist + optional geocode health probe
-- Browser smoke checklist (Chrome / Firefox / Safari)
-- Invalid Review uploads clear the previous map/list
+- In-app **Admin** tab (hidden unless `ADMIN_USERNAME` and `ADMIN_PASSWORD` are set)
+- Login → HttpOnly session cookie; edit runtime defaults; save writes `config/app-config.md`
+- After save: **Apply & reload** so this browser uses the new defaults
+- P7 planned: Render persistent disk so Admin edits survive redeploy
+
+Earlier phases (P0–P5) remain in force: Selection + Review flows, §8.3 errors, key-restriction checklist.
 
 ## Local setup
 
@@ -29,7 +30,7 @@ cp .env.example .env
 | `GOOGLE_MAPS_API_KEY` | HTTP referrers — e.g. `http://localhost:3000/*` | Maps JavaScript API |
 | `GEOCODING_API_KEY` | IP (or none for local) | Geocoding API |
 
-4. Set both in `.env`, then:
+4. Set both in `.env`. Optionally set `ADMIN_USERNAME` / `ADMIN_PASSWORD` to enable the Admin tab. Then:
 
 ```bash
 npm install
@@ -40,6 +41,7 @@ npm start
 Open [http://localhost:3000](http://localhost:3000).
 
 Without `GEOCODING_API_KEY`, map click and lat/long still work; address geocode returns 503.
+Without Admin credentials, the Admin tab stays hidden.
 
 ### Key-restriction verification
 
@@ -74,6 +76,7 @@ On desktop Chrome, Firefox, and Safari (latest):
 - [ ] Load targets → select within min–max → Save Targets → Download JSON
 - [ ] Review: valid JSON renders; invalid JSON shows error and clears the map/list
 - [ ] Maps key missing (temporarily) → blocking error overlay
+- [ ] With `ADMIN_*` set: Admin tab → login → save config → Apply & reload → Selection reflects new defaults
 
 ## Deploy on Render
 
@@ -82,33 +85,41 @@ On desktop Chrome, Firefox, and Safari (latest):
 3. Set:
    - `GOOGLE_MAPS_API_KEY` — referrer-restrict to your Render domain + Maps JavaScript API
    - `GEOCODING_API_KEY` — Geocoding API only; IP-restrict to Render egress when practical
-   - `ADMIN_USERNAME` / `ADMIN_PASSWORD` — optional until P6 Admin; set now if you want them ready on Render
+   - `ADMIN_USERNAME` / `ADMIN_PASSWORD` — required to enable the Admin tab
 4. Deploy, then run the key-restriction checks against the live URL (`/api/health?probe=geocode`).
+
+**Note:** Admin saves write `config/app-config.md` on the instance filesystem. Without a persistent disk (P7), those edits may be lost on redeploy/restart.
 
 ## API
 
 | Route | Purpose |
 |-------|---------|
-| `GET /api/health` | Liveness + whether Maps/geocoding keys are configured |
+| `GET /api/health` | Liveness + whether Maps/geocoding/Admin credentials are configured |
 | `GET /api/health?probe=geocode` | Same + live geocode smoke (`geocodingProbe`) — not used by Render health checks |
-| `GET /api/config` | Public Maps key + defaults (never geocoding key) |
+| `GET /api/config` | Public Maps key + defaults + `adminConfigured` (never geocoding key) |
 | `GET /api/geocode?q=` | Proxies Google Geocoding → lat/lng + address metadata |
 | `GET /api/geocode/reverse?lat=&lng=` | Reverse geocode for region / place default names |
+| `POST /api/admin/login` | Admin session cookie |
+| `POST /api/admin/logout` | Clear Admin session |
+| `GET /api/admin/session` | `{ adminConfigured, authenticated }` |
+| `GET /api/admin/config` | Current editable defaults (auth) |
+| `PUT /api/admin/config` | Validate + write MD (auth); then Apply & reload in the UI |
 
 ## Project layout
 
 ```
-server.js              Express: static + health/config/geocode (ESM)
-config.js              Loads config/app-config.md
+server.js              Express: static + health/config/geocode/admin (ESM)
+config.js              Loads/writes config/app-config.md
 config/app-config.md   Editable defaults (radius, counts, mapType, …)
 lib/geocode.js         Geocode proxy helper
+lib/admin-session.js   Admin session cookie helpers
 public/
-  index.html           Two-tab shell + location + candidates + targeting UI
+  index.html           Selection / Review / Admin UI
   css/app.css
-  js/                  ES modules (app, selection, review, schema, …)
-test/                  node:test (dots, geo, selection-logic, schema, review-logic, config, geocode, api)
+  js/                  ES modules (app, selection, review, admin, schema, …)
+test/                  node:test (…, admin, api, config, …)
 render.yaml            Render Blueprint
 AGENTS.md              Coding / phase standards
 ```
 
-Tune product knobs in `config/app-config.md`, then restart the server. An in-app Admin editor is planned for phase P6.
+Tune product knobs in Admin (preferred) or by editing `config/app-config.md` and restarting.

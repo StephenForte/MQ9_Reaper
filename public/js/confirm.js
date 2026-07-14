@@ -21,6 +21,7 @@ export function confirmAction(message, opts = {}) {
     root.setAttribute('role', 'dialog');
     root.setAttribute('aria-modal', 'true');
     root.setAttribute('aria-labelledby', 'app-confirm-title');
+    root.setAttribute('aria-describedby', 'app-confirm-body');
 
     const panel = document.createElement('div');
     panel.className = 'confirm-panel';
@@ -31,6 +32,7 @@ export function confirmAction(message, opts = {}) {
     heading.textContent = title;
 
     const body = document.createElement('p');
+    body.id = 'app-confirm-body';
     body.className = 'confirm-body';
     body.textContent = message;
 

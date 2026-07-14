@@ -208,8 +208,9 @@ dotLng = centerLng + dLng
 
 **Config delivery:**
 
-1. **Now (v1 file):** edit `config/app-config.md` (YAML frontmatter). Server loads it via `config.js`. Restart after edits. Guard invariant `requiredSelections < dotCount`.
-2. **Later (P6 Admin):** in-app Admin section writes the same parameters (no separate product settings model — same fields).
+1. **File:** edit `config/app-config.md` (YAML frontmatter). Server loads it via `config.js`. Restart after manual edits. Guard invariant `minSelections ≤ maxSelections < dotCount`.
+2. **P6 Admin:** in-app Admin tab writes the same parameters to the same MD file (no separate product settings model). After save, **Apply & reload**. Credentials: `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+3. **P7:** Render persistent disk so Admin writes survive redeploy.
 
 ---
 
@@ -306,7 +307,8 @@ Evergreen desktop browsers, latest two versions: Chrome, Edge, Firefox, Safari. 
 | **P3 — Metadata + export** | Annotate and save. | Targeting list form (name/confidence/priority), per-row validation, JSON export matching §4 via client download (`seed: null` unless `seededRng`). | A complete, schema-valid JSON file downloads with N annotated targets + center/radius/generation metadata. |
 | **P4 — Review tab** | Load and display. | File upload, JSON parse + schema validation, re-render saved center/radius, plot N markers, metadata info windows. | A file exported in P3 loads and renders identically with clickable point details. |
 | **P5 — Hardening** | Edge cases + polish. | All error handling from §8.3, browser pass, key-restriction verification, config MD validation messages. | Every §8.3 row behaves as specified; parameters tunable via `config/app-config.md`. |
-| **P6 — Admin config** | In-app config editing. | Admin section gated by simple shared credentials (`ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars); view/edit §6 parameters and persist them (same fields as the MD file). | Operator can change radius / counts / map type / selection gating / spacing without editing files or redeploying code. |
+| **P6 — Admin config** | In-app config editing. | Admin **tab** gated by simple shared credentials (`ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars); login form → HttpOnly session cookie (8h); view/edit §6 parameters (radius, counts, map type, selection gating, spacing, confirm-on-recenter, default center — not `seededRng` / `radiusUnit`); persist by writing `config/app-config.md` on the server; after save, operator must click **Apply & reload**. Tab hidden when credentials unset. | Operator can change those parameters without editing files or redeploying code (note: Render disk is ephemeral until P7). |
+| **P7 — Persistent Admin config** | Survive redeploys. | Investigate and adopt **Render persistent disk** (or equivalent) so Admin writes to `config/app-config.md` survive service restarts/redeploys; document mount path + Blueprint changes. | Admin edits remain after redeploy without re-entering values. |
 
 *(Assumption: P0–P6 are sequential; each is independently demoable. Parallelization is possible — e.g., Review tab (P4) can start once the schema (§4) is frozen.)*
 
@@ -327,6 +329,8 @@ Evergreen desktop browsers, latest two versions: Chrome, Edge, Firefox, Safari. 
 9. **Q10 — Units.** → Miles only in v1 (`radiusUnit: miles`), configurable for a later unit expansion.
 10. **Q4 — Dot overlap.** → Close allowed; overlap not. Rejection sampling with `minDotSpacingMeters` (default 50).
 11. **P6 Admin auth.** → Simple shared `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars (Render + `.env`). No OAuth/SSO in v1.
+12. **P6 Admin UX.** → Third **Admin** tab (hidden when credentials unset). Login form → signed HttpOnly session cookie. Editable: radius, counts, block extras, spacing, map type, confirm-on-recenter, default center. Read-only in UI: `radiusUnit`, `seededRng`. Save writes `config/app-config.md`; **Apply & reload** required for the open browser. Disk persist across Render redeploys deferred to **P7**.
+13. **P7.** → Render persistent disk (investigate) so Admin MD writes survive redeploy.
 
 ---
 

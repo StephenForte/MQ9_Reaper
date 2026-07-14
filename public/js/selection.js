@@ -95,11 +95,16 @@ export function createSelectionController() {
     const count = selectedCount(candidates);
     const valid = isValidSelection(candidates, min, max);
 
+    const meterLabel = byId('selection-meter-label');
+    if (meterLabel) {
+      meterLabel.textContent =
+        min === max ? `Selected (need ${max})` : `Selected (${min}–${max})`;
+    }
+
     const counterEl = byId('selection-counter');
     if (counterEl) {
       counterEl.textContent = `${count} / ${max}`;
       counterEl.classList.toggle('is-ready', valid);
-      counterEl.classList.toggle('is-exact', valid);
       counterEl.classList.toggle('is-over', count > max);
       counterEl.classList.toggle('is-under', count > 0 && count < min);
     }
@@ -476,6 +481,7 @@ export function createSelectionController() {
     const saveBtn = byIdAs('btn-save-targets');
     if (saveBtn) {
       saveBtn.disabled = true;
+      saveBtn.setAttribute('aria-busy', 'true');
       saveBtn.textContent = 'Resolving names…';
     }
 
@@ -513,7 +519,10 @@ export function createSelectionController() {
         );
       }
     } finally {
-      if (saveBtn) saveBtn.textContent = 'Save Targets';
+      if (saveBtn) {
+        saveBtn.textContent = 'Save Targets';
+        saveBtn.removeAttribute('aria-busy');
+      }
       updateSelectionUi();
     }
   }

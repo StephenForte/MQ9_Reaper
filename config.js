@@ -4,11 +4,27 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * Loads human-editable defaults from config/app-config.md (YAML frontmatter).
- * Admin UI (PRD P6) will eventually write the same file / values.
+ * Admin UI (PRD P6) writes the same file.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const CONFIG_MD = path.join(__dirname, 'config', 'app-config.md');
+
+/**
+ * @typedef {{
+ *   radiusMiles: number,
+ *   dotCount: number,
+ *   minSelections: number,
+ *   maxSelections: number,
+ *   minDotSpacingMeters: number,
+ *   mapType: 'hybrid' | 'satellite',
+ *   radiusUnit: 'miles' | 'km',
+ *   confirmOnRecenter: boolean,
+ *   seededRng: boolean,
+ *   blockExtraSelections: boolean,
+ *   defaultCenter: { lat: number, lng: number },
+ * }} AppConfigValue
+ */
 
 /**
  * @param {string} field
@@ -45,6 +61,16 @@ export function parseFrontmatter(text) {
     raw[key] = value;
   }
   return raw;
+}
+
+/**
+ * Markdown body below the closing `---` of frontmatter.
+ * @param {string} text
+ * @returns {string}
+ */
+export function extractMarkdownBody(text) {
+  const match = text.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n([\s\S]*)$/);
+  return match ? match[1] : '';
 }
 
 /**
@@ -88,6 +114,7 @@ function requireInteger(raw, key) {
 
 /**
  * @param {Record<string, string>} raw
+ * @returns {AppConfigValue}
  */
 export function toAppConfig(raw) {
   const radiusMiles = requireNumber(raw, 'radiusMiles');
@@ -196,9 +223,189 @@ export function toAppConfig(raw) {
   };
 }
 
-export function loadAppConfig() {
-  const text = fs.readFileSync(CONFIG_MD, 'utf8');
+/**
+ * Serialize config to YAML frontmatter (flat key: value).
+ * @param {AppConfigValue} config
+ * @returns {string}
+ */
+export function serializeFrontmatter(config) {
+  const lines = [
+    '---',
+    `radiusMiles: ${config.radiusMiles}`,
+    `dotCount: ${config.dotCount}`,
+    `minSelections: ${config.minSelections}`,
+    `maxSelections: ${config.maxSelections}`,
+    `blockExtraSelections: ${config.blockExtraSelections}`,
+    `minDotSpacingMeters: ${config.minDotSpacingMeters}`,
+    `mapType: ${config.mapType}`,
+    `radiusUnit: ${config.radiusUnit}`,
+    `confirmOnRecenter: ${config.confirmOnRecenter}`,
+    `seededRng: ${config.seededRng}`,
+    `defaultCenterLat: ${config.defaultCenter.lat}`,
+    `defaultCenterLng: ${config.defaultCenter.lng}`,
+    '---',
+    '',
+  ];
+  return lines.join('\n');
+}
+
+/**
+ * Build full MD file text, preserving the documentation body.
+ * @param {AppConfigValue} config
+ * @param {string} [existingText]
+ */
+export function buildConfigMarkdown(config, existingText = '') {
+  const body = existingText
+    ? extractMarkdownBody(existingText)
+    : '\n# App Config\n\nHuman-editable runtime defaults for MQ9 Reaper.\n';
+  return `${serializeFrontmatter(config)}${body.startsWith('\n') ? body.slice(1) : body}`;
+}
+
+/**
+ * Admin-editable fields (P6). `seededRng` and `radiusUnit` are preserved from current.
+ * @param {unknown} body
+ * @param {AppConfigValue} current
+ * @returns {AppConfigValue}
+ */
+export function mergeAdminConfigPatch(body, current) {
+  if (!body || typeof body !== 'object') {
+    throw new Error('config: invalid body — expected a JSON object');
+  }
+  const patch = /** @type {Record<string, unknown>} */ (body);
+
+  /** @type {Record<string, string>} */
+  const raw = {
+    radiusMiles: String(
+      patch.radiusMiles !== undefined ? patch.radiusMiles : current.radiusMiles
+    ),
+    dotCount: String(
+      patch.dotCount !== undefined ? patch.dotCount : current.dotCount
+    ),
+    minSelections: String(
+      patch.minSelections !== undefined
+        ? patch.minSelections
+        : current.minSelections
+    ),
+    maxSelections: String(
+      patch.maxSelections !== undefined
+        ? patch.maxSelections
+        : current.maxSelections
+    ),
+    blockExtraSelections: String(
+      patch.blockExtraSelections !== undefined
+        ? patch.blockExtraSelections
+        : current.blockExtraSelections
+    ),
+    minDotSpacingMeters: String(
+      patch.minDotSpacingMeters !== undefined
+        ? patch.minDotSpacingMeters
+        : current.minDotSpacingMeters
+    ),
+    mapType: String(
+      patch.mapType !== undefined ? patch.mapType : current.mapType
+    ),
+    radiusUnit: current.radiusUnit,
+    confirmOnRecenter: String(
+      patch.confirmOnRecenter !== undefined
+        ? patch.confirmOnRecenter
+        : current.confirmOnRecenter
+    ),
+    seededRng: String(current.seededRng),
+    defaultCenterLat: String(
+      patch.defaultCenterLat !== undefined
+        ? patch.defaultCenterLat
+        : patch.defaultCenter &&
+            typeof patch.defaultCenter === 'object' &&
+            /** @type {{ lat?: unknown }} */ (patch.defaultCenter).lat !==
+              undefined
+          ? /** @type {{ lat: unknown }} */ (patch.defaultCenter).lat
+          : current.defaultCenter.lat
+    ),
+    defaultCenterLng: String(
+      patch.defaultCenterLng !== undefined
+        ? patch.defaultCenterLng
+        : patch.defaultCenter &&
+            typeof patch.defaultCenter === 'object' &&
+            /** @type {{ lng?: unknown }} */ (patch.defaultCenter).lng !==
+              undefined
+          ? /** @type {{ lng: unknown }} */ (patch.defaultCenter).lng
+          : current.defaultCenter.lng
+    ),
+  };
+
+  return toAppConfig(raw);
+}
+
+/**
+ * Public shape for GET /api/config and Admin responses.
+ * @param {AppConfigValue} config
+ */
+export function defaultsForClient(config) {
+  return {
+    radiusMiles: config.radiusMiles,
+    dotCount: config.dotCount,
+    minSelections: config.minSelections,
+    maxSelections: config.maxSelections,
+    blockExtraSelections: config.blockExtraSelections,
+    minDotSpacingMeters: config.minDotSpacingMeters,
+    mapType: config.mapType,
+    radiusUnit: config.radiusUnit,
+    confirmOnRecenter: config.confirmOnRecenter,
+    seededRng: config.seededRng,
+    center: {
+      lat: config.defaultCenter.lat,
+      lng: config.defaultCenter.lng,
+    },
+  };
+}
+
+/**
+ * @param {string} [filePath]
+ * @returns {AppConfigValue}
+ */
+export function loadAppConfig(filePath = CONFIG_MD) {
+  const text = fs.readFileSync(filePath, 'utf8');
   return toAppConfig(parseFrontmatter(text));
 }
 
-export const appConfig = loadAppConfig();
+/**
+ * @param {AppConfigValue} config
+ * @param {{ path?: string, existingText?: string }} [opts]
+ */
+export function writeAppConfig(config, opts = {}) {
+  const filePath = opts.path || CONFIG_MD;
+  const existingText =
+    opts.existingText !== undefined
+      ? opts.existingText
+      : fs.existsSync(filePath)
+        ? fs.readFileSync(filePath, 'utf8')
+        : '';
+  const text = buildConfigMarkdown(config, existingText);
+  fs.writeFileSync(filePath, text, 'utf8');
+  return text;
+}
+
+/** @type {AppConfigValue} */
+let runtimeAppConfig = loadAppConfig();
+
+export function getAppConfig() {
+  return runtimeAppConfig;
+}
+
+/**
+ * @param {AppConfigValue} config
+ */
+export function setAppConfig(config) {
+  runtimeAppConfig = config;
+}
+
+/**
+ * @param {string} [filePath]
+ */
+export function reloadAppConfig(filePath = CONFIG_MD) {
+  runtimeAppConfig = loadAppConfig(filePath);
+  return runtimeAppConfig;
+}
+
+/** Prefer getAppConfig() so Admin saves are visible to new createApp() calls. */
+export const appConfig = getAppConfig();

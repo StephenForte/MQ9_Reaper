@@ -40,12 +40,15 @@ describe('/api/health', () => {
       mapsKey: 'maps',
       geocodingKey: '',
       config: stubConfig,
+      adminUsername: '',
+      adminPassword: '',
     });
     const { status, body } = await getJson(app, '/api/health');
     assert.equal(status, 200);
     assert.equal(body.ok, true);
     assert.equal(body.mapsKeyConfigured, true);
     assert.equal(body.geocodingConfigured, false);
+    assert.equal(body.adminConfigured, false);
     assert.equal(body.geocodingProbe, undefined);
   });
 
@@ -87,10 +90,13 @@ describe('/api/config', () => {
       mapsKey: 'browser-key',
       geocodingKey: 'server-secret',
       config: stubConfig,
+      adminUsername: '',
+      adminPassword: '',
     });
     const { status, body } = await getJson(app, '/api/config');
     assert.equal(status, 200);
     assert.equal(body.mapsApiKey, 'browser-key');
+    assert.equal(body.adminConfigured, false);
     assert.equal(body.defaults.blockExtraSelections, true);
     assert.equal(body.defaults.maxSelections, 12);
     assert.equal(JSON.stringify(body).includes('server-secret'), false);

@@ -47,6 +47,19 @@
           >
             Review
           </button>
+          <button
+            type="button"
+            class="tab"
+            role="tab"
+            id="tab-admin"
+            aria-selected="false"
+            aria-controls="panel-admin"
+            data-tab="admin"
+            tabindex="-1"
+            hidden
+          >
+            Admin
+          </button>
         </nav>
       </header>
 
@@ -60,8 +73,9 @@
           <aside class="side-panel">
             <h2 class="side-title">Location</h2>
             <p class="side-copy">
-              Set the center, apply a radius, then load candidate targets and
-              shortlist between the configured min and max.
+              Set the center, apply a radius, load candidate targets, then
+              shortlist within the configured min–max range and annotate for
+              download.
             </p>
 
             <section class="side-section" aria-labelledby="center-heading">
@@ -143,8 +157,9 @@
                 Target selection
               </h3>
               <p class="hint">
-                Load targets inside the radius, then click markers on the map to
-                select or deselect.
+                Load targets inside the radius, then click markers to select or
+                deselect. Reload replaces the set (confirms if you already have
+                a selection).
               </p>
               <div class="candidates-actions">
                 <button
@@ -168,7 +183,9 @@
                 </button>
               </div>
               <div class="selection-meter" aria-live="polite">
-                <span class="field-label">Selected</span>
+                <span class="field-label" id="selection-meter-label"
+                  >Selected</span
+                >
                 <span id="selection-counter" class="selection-counter">0 / —</span>
               </div>
               <p id="candidates-status" class="hint hint-tight">
@@ -187,8 +204,8 @@
                 Targeting list
               </h3>
               <p class="hint">
-                Name each target, set confidence (1–5) and priority, then
-                download JSON.
+                After Save Targets: name each row, set confidence (1–5) and
+                priority, then Download JSON.
               </p>
               <p
                 id="targeting-place-notice"
@@ -341,6 +358,232 @@
             ></div>
             <div id="map-review-error" class="map-error" hidden></div>
           </div>
+        </section>
+
+        <section
+          id="panel-admin"
+          class="panel panel-admin"
+          role="tabpanel"
+          aria-labelledby="tab-admin"
+          hidden
+        >
+          <aside class="side-panel side-panel-admin">
+            <h2 class="side-title">Admin</h2>
+            <p class="side-copy">
+              Edit runtime defaults (radius, counts, map type, selection gating,
+              spacing, confirm-on-recenter, default center). Changes write to
+              <code class="inline-code">config/app-config.md</code>. After save,
+              use Apply &amp; reload so this browser picks them up.
+            </p>
+
+            <section
+              id="admin-login-section"
+              class="side-section"
+              aria-labelledby="admin-login-heading"
+            >
+              <h3 id="admin-login-heading" class="side-section-title">
+                Sign in
+              </h3>
+              <form id="form-admin-login" class="loc-form" novalidate>
+                <label class="field">
+                  <span class="field-label">Username</span>
+                  <input
+                    id="admin-username"
+                    name="username"
+                    type="text"
+                    autocomplete="username"
+                    required
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label">Password</span>
+                  <input
+                    id="admin-password"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                  />
+                </label>
+                <button
+                  type="submit"
+                  class="btn btn-primary btn-block"
+                  id="btn-admin-login"
+                >
+                  Log in
+                </button>
+                <p id="admin-login-error" class="field-error" role="alert" hidden></p>
+              </form>
+            </section>
+
+            <section
+              id="admin-editor-section"
+              class="side-section"
+              aria-labelledby="admin-config-heading"
+              hidden
+            >
+              <div class="admin-toolbar">
+                <h3 id="admin-config-heading" class="side-section-title">
+                  App config
+                </h3>
+                <button type="button" class="btn btn-quiet" id="btn-admin-logout">
+                  Log out
+                </button>
+              </div>
+              <p id="admin-persist-note" class="hint hint-warn hint-tight" hidden></p>
+
+              <form id="form-admin-config" class="loc-form" novalidate>
+                <label class="field">
+                  <span class="field-label">Default radius (miles)</span>
+                  <input
+                    id="admin-radiusMiles"
+                    name="radiusMiles"
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    required
+                  />
+                </label>
+                <div class="field-row">
+                  <label class="field">
+                    <span class="field-label">Dot count</span>
+                    <input
+                      id="admin-dotCount"
+                      name="dotCount"
+                      type="number"
+                      min="2"
+                      step="1"
+                      required
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Min spacing (m)</span>
+                    <input
+                      id="admin-minDotSpacingMeters"
+                      name="minDotSpacingMeters"
+                      type="number"
+                      min="0"
+                      step="1"
+                      required
+                    />
+                  </label>
+                </div>
+                <div class="field-row">
+                  <label class="field">
+                    <span class="field-label">Min selections</span>
+                    <input
+                      id="admin-minSelections"
+                      name="minSelections"
+                      type="number"
+                      min="1"
+                      step="1"
+                      required
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Max selections</span>
+                    <input
+                      id="admin-maxSelections"
+                      name="maxSelections"
+                      type="number"
+                      min="1"
+                      step="1"
+                      required
+                    />
+                  </label>
+                </div>
+                <p class="hint hint-tight">
+                  Invariant: min ≤ max &lt; dot count.
+                </p>
+                <label class="field">
+                  <span class="field-label">Block extras above max</span>
+                  <select id="admin-blockExtraSelections" name="blockExtraSelections">
+                    <option value="true">true — block selecting above max</option>
+                    <option value="false">false — allow extras; Save still gated</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Map type</span>
+                  <select id="admin-mapType" name="mapType">
+                    <option value="hybrid">hybrid</option>
+                    <option value="satellite">satellite</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Confirm on recenter</span>
+                  <select id="admin-confirmOnRecenter" name="confirmOnRecenter">
+                    <option value="true">true — prompt when selection would clear</option>
+                    <option value="false">false — change without prompt</option>
+                  </select>
+                </label>
+                <div class="field-row">
+                  <label class="field">
+                    <span class="field-label">Default center lat</span>
+                    <input
+                      id="admin-defaultCenterLat"
+                      name="defaultCenterLat"
+                      type="number"
+                      min="-90"
+                      max="90"
+                      step="any"
+                      required
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Default center lng</span>
+                    <input
+                      id="admin-defaultCenterLng"
+                      name="defaultCenterLng"
+                      type="number"
+                      min="-180"
+                      max="180"
+                      step="any"
+                      required
+                    />
+                  </label>
+                </div>
+
+                <dl class="meta-list admin-readonly">
+                  <div>
+                    <dt>Radius unit</dt>
+                    <dd id="admin-radiusUnit">miles</dd>
+                  </div>
+                  <div>
+                    <dt>Seeded RNG</dt>
+                    <dd id="admin-seededRng">false</dd>
+                  </div>
+                </dl>
+
+                <div class="admin-actions">
+                  <button
+                    type="submit"
+                    class="btn btn-primary"
+                    id="btn-admin-save"
+                  >
+                    Save config
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    id="btn-admin-apply"
+                    disabled
+                  >
+                    Apply &amp; reload
+                  </button>
+                  <button type="button" class="btn" id="btn-admin-reload">
+                    Revert form
+                  </button>
+                </div>
+                <p id="admin-error" class="field-error" role="alert" hidden></p>
+                <p
+                  id="admin-success"
+                  class="hint hint-success hint-tight"
+                  role="status"
+                  hidden
+                ></p>
+              </form>
+            </section>
+          </aside>
         </section>
       </main>
     </div>

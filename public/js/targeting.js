@@ -1,3 +1,4 @@
+import { byId, byIdAs } from './dom.js';
 import { PRIORITIES, validateTargetingRow } from './schema.js';
 import { setFieldError } from './ui.js';
 
@@ -26,13 +27,11 @@ export function createTargetingController() {
 
   function els() {
     return {
-      section: document.getElementById('section-targeting'),
-      list: document.getElementById('targeting-list'),
-      staleEl: document.getElementById('targeting-stale'),
-      downloadBtn: /** @type {HTMLButtonElement | null} */ (
-        document.getElementById('btn-download-json')
-      ),
-      successEl: document.getElementById('targeting-success'),
+      section: byId('section-targeting'),
+      list: byId('targeting-list'),
+      staleEl: byId('targeting-stale'),
+      downloadBtn: byIdAs('btn-download-json'),
+      successEl: byId('targeting-success'),
     };
   }
 

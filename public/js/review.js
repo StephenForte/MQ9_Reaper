@@ -262,6 +262,9 @@ export function createReviewController() {
    */
   function loadFromFile(file) {
     return new Promise((resolve) => {
+      setFieldError('review-error', '');
+      const statusEl = byId('review-status');
+      if (statusEl) statusEl.textContent = 'Reading file…';
       const reader = new FileReader();
       reader.onload = () => {
         const text = typeof reader.result === 'string' ? reader.result : '';

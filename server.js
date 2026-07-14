@@ -2,7 +2,23 @@ import 'dotenv/config';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import express from 'express';
-import { appConfig } from './config.js';
+import {
+  CONFIG_MD,
+  defaultsForClient,
+  getAppConfig,
+  mergeAdminConfigPatch,
+  setAppConfig,
+  writeAppConfig,
+} from './config.js';
+import {
+  ADMIN_COOKIE,
+  createSessionToken,
+  parseCookies,
+  requestIsSecure,
+  sessionClearCookieHeader,
+  sessionSetCookieHeader,
+  verifySessionToken,
+} from './lib/admin-session.js';
 import { geocodeAddress, reverseGeocode } from './lib/geocode.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -11,7 +27,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * @param {{
  *   mapsKey?: string,
  *   geocodingKey?: string,
- *   config?: typeof appConfig,
+ *   config?: ReturnType<typeof getAppConfig>,
+ *   configPath?: string,
+ *   writeConfigFn?: (config: ReturnType<typeof getAppConfig>) => void,
+ *   adminUsername?: string,
+ *   adminPassword?: string,
  *   geocodeFn?: typeof geocodeAddress,
  *   reverseGeocodeFn?: typeof reverseGeocode,
  * }} [deps]
@@ -25,12 +45,60 @@ export function createApp(deps = {}) {
     deps.geocodingKey !== undefined
       ? deps.geocodingKey
       : process.env.GEOCODING_API_KEY || '';
-  const config = deps.config || appConfig;
+  /** @type {ReturnType<typeof getAppConfig>} */
+  let config = deps.config !== undefined ? deps.config : getAppConfig();
+  const configPath = deps.configPath || CONFIG_MD;
+  const writeConfig =
+    deps.writeConfigFn ||
+    ((next) => {
+      writeAppConfig(next, { path: configPath });
+    });
   const geocodeFn = deps.geocodeFn || geocodeAddress;
   const reverseGeocodeFn = deps.reverseGeocodeFn || reverseGeocode;
 
+  const adminUsername =
+    deps.adminUsername !== undefined
+      ? deps.adminUsername
+      : process.env.ADMIN_USERNAME || '';
+  const adminPassword =
+    deps.adminPassword !== undefined
+      ? deps.adminPassword
+      : process.env.ADMIN_PASSWORD || '';
+  const adminConfigured = Boolean(adminUsername && adminPassword);
+
   const app = express();
+  app.use(express.json({ limit: '32kb' }));
   app.use(express.static(path.join(__dirname, 'public')));
+
+  /**
+   * @param {import('express').Request} req
+   */
+  function isAdminAuthenticated(req) {
+    if (!adminConfigured) return false;
+    const cookies = parseCookies(req);
+    return verifySessionToken(
+      cookies[ADMIN_COOKIE],
+      adminUsername,
+      adminPassword
+    );
+  }
+
+  /**
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   * @param {import('express').NextFunction} next
+   */
+  function requireAdmin(req, res, next) {
+    if (!adminConfigured) {
+      return res.status(503).json({
+        error: 'Admin is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD.',
+      });
+    }
+    if (!isAdminAuthenticated(req)) {
+      return res.status(401).json({ error: 'Admin login required.' });
+    }
+    return next();
+  }
 
   /** Liveness for Render / local smoke checks. Use ?probe=geocode for key smoke. */
   app.get('/api/health', async (req, res) => {
@@ -38,6 +106,7 @@ export function createApp(deps = {}) {
       ok: true,
       mapsKeyConfigured: Boolean(mapsKey),
       geocodingConfigured: Boolean(geocodingKey),
+      adminConfigured,
     };
 
     if (req.query.probe !== 'geocode') {
@@ -55,7 +124,10 @@ export function createApp(deps = {}) {
     }
 
     try {
-      const result = await geocodeFn('1600 Amphitheatre Parkway, Mountain View, CA', geocodingKey);
+      const result = await geocodeFn(
+        '1600 Amphitheatre Parkway, Mountain View, CA',
+        geocodingKey
+      );
       if (!result.ok) {
         return res.json({
           ...payload,
@@ -90,20 +162,90 @@ export function createApp(deps = {}) {
   app.get('/api/config', (_req, res) => {
     res.json({
       mapsApiKey: mapsKey,
-      defaults: {
-        radiusMiles: config.radiusMiles,
-        dotCount: config.dotCount,
-        minSelections: config.minSelections,
-        maxSelections: config.maxSelections,
-        blockExtraSelections: config.blockExtraSelections,
-        minDotSpacingMeters: config.minDotSpacingMeters,
-        mapType: config.mapType,
-        radiusUnit: config.radiusUnit,
-        confirmOnRecenter: config.confirmOnRecenter,
-        seededRng: config.seededRng,
-        center: config.defaultCenter,
-      },
+      adminConfigured,
+      defaults: defaultsForClient(config),
     });
+  });
+
+  app.post('/api/admin/login', (req, res) => {
+    if (!adminConfigured) {
+      return res.status(503).json({
+        error: 'Admin is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD.',
+      });
+    }
+
+    const username =
+      typeof req.body?.username === 'string' ? req.body.username : '';
+    const password =
+      typeof req.body?.password === 'string' ? req.body.password : '';
+
+    if (username !== adminUsername || password !== adminPassword) {
+      return res.status(401).json({ error: 'Invalid username or password.' });
+    }
+
+    const token = createSessionToken(adminUsername, adminPassword);
+    const secure = requestIsSecure(req);
+    res.setHeader('Set-Cookie', sessionSetCookieHeader(req, secure, token));
+    return res.json({ ok: true, authenticated: true });
+  });
+
+  app.post('/api/admin/logout', (req, res) => {
+    const secure = requestIsSecure(req);
+    res.setHeader('Set-Cookie', sessionClearCookieHeader(secure));
+    return res.json({ ok: true, authenticated: false });
+  });
+
+  app.get('/api/admin/session', (req, res) => {
+    if (!adminConfigured) {
+      return res.json({ adminConfigured: false, authenticated: false });
+    }
+    return res.json({
+      adminConfigured: true,
+      authenticated: isAdminAuthenticated(req),
+    });
+  });
+
+  app.get('/api/admin/config', requireAdmin, (_req, res) => {
+    res.json({
+      defaults: defaultsForClient(config),
+      editable: [
+        'radiusMiles',
+        'dotCount',
+        'minSelections',
+        'maxSelections',
+        'blockExtraSelections',
+        'minDotSpacingMeters',
+        'mapType',
+        'confirmOnRecenter',
+        'defaultCenterLat',
+        'defaultCenterLng',
+      ],
+      readOnly: ['radiusUnit', 'seededRng'],
+      persistenceNote:
+        'Saved to config/app-config.md on this server. On Render without a persistent disk, edits may be lost on redeploy (see PRD P7).',
+    });
+  });
+
+  app.put('/api/admin/config', requireAdmin, (req, res) => {
+    try {
+      const next = mergeAdminConfigPatch(req.body, config);
+      writeConfig(next);
+      config = next;
+      if (deps.config === undefined) {
+        setAppConfig(next);
+      }
+      return res.json({
+        ok: true,
+        defaults: defaultsForClient(config),
+        applyRequired: true,
+        message:
+          'Config saved. Click Apply & reload in Admin for this browser to use the new defaults.',
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Invalid configuration.';
+      return res.status(400).json({ error: message.replace(/^config:\s*/, '') });
+    }
   });
 
   /**
@@ -204,6 +346,11 @@ if (isMain) {
     if (!process.env.GEOCODING_API_KEY) {
       console.warn(
         'Warning: GEOCODING_API_KEY is not set — address geocoding will return 503.'
+      );
+    }
+    if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
+      console.warn(
+        'Warning: ADMIN_USERNAME / ADMIN_PASSWORD not set — Admin tab stays hidden.'
       );
     }
   });

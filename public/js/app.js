@@ -1,3 +1,4 @@
+import { createAdminController } from './admin.js';
 import { ensureMapsApi } from './maps-loader.js';
 import { createReviewController } from './review.js';
 import { createSelectionController } from './selection.js';
@@ -16,6 +17,7 @@ const mapsByPanel = new Map();
 
 const selection = createSelectionController();
 const review = createReviewController();
+const admin = createAdminController();
 
 async function fetchConfig() {
   const res = await fetch('/api/config');
@@ -96,9 +98,13 @@ async function ensureMap(panel) {
 }
 
 /**
- * @param {'select' | 'review'} tabName
+ * @param {string} tabName
  */
 function onTabActivate(tabName) {
+  if (tabName === 'admin') return;
+
+  if (tabName !== 'select' && tabName !== 'review') return;
+
   const map = mapsByPanel.get(tabName);
   if (map && window.google?.maps) {
     requestAnimationFrame(() => {
@@ -118,9 +124,11 @@ async function boot() {
   wireTabs({ onActivate: onTabActivate });
   selection.wireForms();
   review.wireUpload();
+  admin.wireForms();
 
   try {
     runtimeConfig = await fetchConfig();
+    admin.init(runtimeConfig);
     selection.fillDefaults(runtimeConfig);
     await ensureMap('select');
   } catch (err) {

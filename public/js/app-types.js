@@ -5,6 +5,7 @@
  * @typedef {{ lat: number, lng: number }} LatLng
  * @typedef {{
  *   mapsApiKey: string,
+ *   adminConfigured?: boolean,
  *   defaults: {
  *     radiusMiles: number,
  *     dotCount: number,

@@ -1,39 +1,49 @@
 /**
- * Two-tab shell (Target Selection | Review).
+ * Tab shell (Target Selection | Review | Admin).
+ * Skips tabs with the hidden attribute (e.g. Admin when not configured).
  * @param {{
- *   onActivate: (tab: 'select' | 'review') => void
+ *   onActivate: (tab: string) => void
  * }} options
  */
 export function wireTabs({ onActivate }) {
+  /**
+   * @returns {HTMLElement[]}
+   */
+  function visibleTabs() {
+    return [...document.querySelectorAll('.tab')].filter(
+      (tab) => tab instanceof HTMLElement && !tab.hidden
+    );
+  }
+
   document.querySelectorAll('.tab').forEach((tab) => {
+    if (!(tab instanceof HTMLElement)) return;
+
     tab.addEventListener('click', () => {
-      setActiveTab(/** @type {'select' | 'review'} */ (tab.dataset.tab || 'select'));
+      if (tab.hidden) return;
+      setActiveTab(tab.dataset.tab || 'select');
     });
 
     tab.addEventListener('keydown', (event) => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       event.preventDefault();
-      const tabs = [...document.querySelectorAll('.tab')];
+      const tabs = visibleTabs();
       const index = tabs.indexOf(tab);
       if (index < 0) return;
       const next =
         event.key === 'ArrowRight'
           ? tabs[(index + 1) % tabs.length]
           : tabs[(index - 1 + tabs.length) % tabs.length];
-      /** @type {HTMLElement} */ (next).focus();
-      setActiveTab(
-        /** @type {'select' | 'review'} */ (
-          /** @type {HTMLElement} */ (next).dataset.tab || 'select'
-        )
-      );
+      next.focus();
+      setActiveTab(next.dataset.tab || 'select');
     });
   });
 
   /**
-   * @param {'select' | 'review'} tabName
+   * @param {string} tabName
    */
   function setActiveTab(tabName) {
     document.querySelectorAll('.tab').forEach((tab) => {
+      if (!(tab instanceof HTMLElement)) return;
       const active = tab.dataset.tab === tabName;
       tab.classList.toggle('is-active', active);
       tab.setAttribute('aria-selected', active ? 'true' : 'false');

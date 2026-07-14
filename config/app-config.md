@@ -15,9 +15,9 @@ defaultCenterLng: -121.7124
 
 # App Config
 
-Human-editable runtime defaults for MQ9 Reaper. **Restart the server** after changing values.
+Human-editable runtime defaults for MQ9 Reaper. Edit here **or** use the in-app **Admin** tab (P6) when `ADMIN_USERNAME` / `ADMIN_PASSWORD` are set. Admin writes this same file; click **Apply & reload** in the UI after saving. Manual file edits still require a server restart.
 
-Later: an **Admin** section in the app will edit these in-app (see PRD phase **P6**). Until then, this file is the source of truth — `config.js` loads it.
+On Render without a persistent disk, Admin writes may be lost on redeploy (see PRD **P7**).
 
 ## Fields
 
