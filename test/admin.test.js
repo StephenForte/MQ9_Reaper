@@ -15,6 +15,7 @@ import {
   createSessionToken,
   verifySessionToken,
 } from '../lib/admin-session.js';
+import { createLoginRateLimiter } from '../lib/login-rate-limit.js';
 import { createApp } from '../server.js';
 
 /**
@@ -78,12 +79,30 @@ const stubConfig = {
   defaultCenter: { lat: 37.8, lng: -121.7 },
 };
 
+const ADMIN_USER = 'admin';
+const ADMIN_PASS = 'test-password-12';
+const ADMIN_SECRET = 'test-session-secret!';
+
+/** @param {Record<string, unknown>} [extra] */
+function adminApp(extra = {}) {
+  return createApp({
+    mapsKey: '',
+    geocodingKey: '',
+    config: stubConfig,
+    adminUsername: ADMIN_USER,
+    adminPassword: ADMIN_PASS,
+    adminSessionSecret: ADMIN_SECRET,
+    warn: () => {},
+    ...extra,
+  });
+}
+
 describe('admin session tokens', () => {
   it('round-trips a valid session', () => {
-    const token = createSessionToken('ops', 'secret');
-    assert.equal(verifySessionToken(token, 'ops', 'secret'), true);
-    assert.equal(verifySessionToken(token, 'ops', 'wrong'), false);
-    assert.equal(verifySessionToken(token, 'other', 'secret'), false);
+    const token = createSessionToken('ops', ADMIN_SECRET);
+    assert.equal(verifySessionToken(token, 'ops', ADMIN_SECRET), true);
+    assert.equal(verifySessionToken(token, 'ops', 'wrong-secret!!!!!!!!'), false);
+    assert.equal(verifySessionToken(token, 'other', ADMIN_SECRET), false);
   });
 });
 
@@ -168,21 +187,35 @@ describe('Admin API', () => {
       config: stubConfig,
       adminUsername: '',
       adminPassword: '',
+      warn: () => {},
     });
     const offHealth = await requestJson(off, '/api/health');
     assert.equal(offHealth.body.adminConfigured, false);
     const offConfig = await requestJson(off, '/api/config');
     assert.equal(offConfig.body.adminConfigured, false);
 
-    const on = createApp({
-      mapsKey: 'm',
-      geocodingKey: '',
-      config: { ...stubConfig },
-      adminUsername: 'admin',
-      adminPassword: 'pass',
-    });
+    const on = adminApp({ mapsKey: 'm', config: { ...stubConfig } });
     const onHealth = await requestJson(on, '/api/health');
     assert.equal(onHealth.body.adminConfigured, true);
+  });
+
+  it('keeps Admin disabled when password is too short', async () => {
+    const app = createApp({
+      mapsKey: '',
+      geocodingKey: '',
+      config: stubConfig,
+      adminUsername: 'admin',
+      adminPassword: 'short',
+      adminSessionSecret: ADMIN_SECRET,
+      warn: () => {},
+    });
+    const { body } = await requestJson(app, '/api/health');
+    assert.equal(body.adminConfigured, false);
+    const login = await requestJson(app, '/api/admin/login', {
+      method: 'POST',
+      body: { username: 'admin', password: 'short' },
+    });
+    assert.equal(login.status, 503);
   });
 
   it('rejects login when admin is not configured', async () => {
@@ -192,6 +225,7 @@ describe('Admin API', () => {
       config: stubConfig,
       adminUsername: '',
       adminPassword: '',
+      warn: () => {},
     });
     const { status, body } = await requestJson(app, '/api/admin/login', {
       method: 'POST',
@@ -202,28 +236,36 @@ describe('Admin API', () => {
   });
 
   it('rejects bad credentials', async () => {
-    const app = createApp({
-      mapsKey: '',
-      geocodingKey: '',
-      config: stubConfig,
-      adminUsername: 'admin',
-      adminPassword: 'pass',
-    });
+    const app = adminApp();
     const { status, body } = await requestJson(app, '/api/admin/login', {
       method: 'POST',
-      body: { username: 'admin', password: 'nope' },
+      body: { username: ADMIN_USER, password: 'nope-nope-nope' },
     });
     assert.equal(status, 401);
     assert.match(body.error, /Invalid/i);
   });
 
+  it('rate-limits repeated login attempts', async () => {
+    const limiter = createLoginRateLimiter({ limit: 3, windowMs: 60_000 });
+    const app = adminApp({ loginRateLimiter: limiter });
+    for (let i = 0; i < 3; i += 1) {
+      const res = await requestJson(app, '/api/admin/login', {
+        method: 'POST',
+        body: { username: ADMIN_USER, password: 'wrong-password!' },
+      });
+      assert.equal(res.status, 401);
+    }
+    const blocked = await requestJson(app, '/api/admin/login', {
+      method: 'POST',
+      body: { username: ADMIN_USER, password: ADMIN_PASS },
+    });
+    assert.equal(blocked.status, 429);
+    assert.match(blocked.body.error, /Too many login attempts/);
+  });
+
   it('requires auth for config GET/PUT', async () => {
-    const app = createApp({
-      mapsKey: '',
-      geocodingKey: '',
+    const app = adminApp({
       config: { ...stubConfig },
-      adminUsername: 'admin',
-      adminPassword: 'pass',
       writeConfigFn: () => {},
     });
     const getUnauth = await requestJson(app, '/api/admin/config');
@@ -240,12 +282,9 @@ describe('Admin API', () => {
     /** @type {typeof stubConfig | null} */
     let written = null;
     const live = { ...stubConfig };
-    const app = createApp({
+    const app = adminApp({
       mapsKey: 'browser-key',
-      geocodingKey: '',
       config: live,
-      adminUsername: 'admin',
-      adminPassword: 'pass',
       writeConfigFn: (cfg) => {
         written = cfg;
         Object.assign(live, cfg);
@@ -254,7 +293,7 @@ describe('Admin API', () => {
 
     const login = await requestJson(app, '/api/admin/login', {
       method: 'POST',
-      body: { username: 'admin', password: 'pass' },
+      body: { username: ADMIN_USER, password: ADMIN_PASS },
     });
     assert.equal(login.status, 200);
     assert.equal(login.body.authenticated, true);
@@ -294,17 +333,13 @@ describe('Admin API', () => {
   });
 
   it('returns 400 for invalid config saves', async () => {
-    const app = createApp({
-      mapsKey: '',
-      geocodingKey: '',
+    const app = adminApp({
       config: { ...stubConfig },
-      adminUsername: 'admin',
-      adminPassword: 'pass',
       writeConfigFn: () => {},
     });
     const login = await requestJson(app, '/api/admin/login', {
       method: 'POST',
-      body: { username: 'admin', password: 'pass' },
+      body: { username: ADMIN_USER, password: ADMIN_PASS },
     });
     const cookie = cookieHeaderFromSetCookie(login.setCookie);
     const save = await requestJson(app, '/api/admin/config', {
@@ -317,16 +352,10 @@ describe('Admin API', () => {
   });
 
   it('logout clears the session cookie', async () => {
-    const app = createApp({
-      mapsKey: '',
-      geocodingKey: '',
-      config: stubConfig,
-      adminUsername: 'admin',
-      adminPassword: 'pass',
-    });
+    const app = adminApp();
     const login = await requestJson(app, '/api/admin/login', {
       method: 'POST',
-      body: { username: 'admin', password: 'pass' },
+      body: { username: ADMIN_USER, password: ADMIN_PASS },
     });
     const cookie = cookieHeaderFromSetCookie(login.setCookie);
     const session = await requestJson(app, '/api/admin/session', {
@@ -352,6 +381,7 @@ describe('Admin API', () => {
       config: stubConfig,
       adminUsername: '',
       adminPassword: '',
+      warn: () => {},
     });
     const offSession = await requestJson(off, '/api/admin/session');
     assert.deepEqual(offSession.body, {
@@ -359,13 +389,7 @@ describe('Admin API', () => {
       authenticated: false,
     });
 
-    const on = createApp({
-      mapsKey: '',
-      geocodingKey: '',
-      config: stubConfig,
-      adminUsername: 'admin',
-      adminPassword: 'pass',
-    });
+    const on = adminApp();
     const anon = await requestJson(on, '/api/admin/session');
     assert.equal(anon.body.adminConfigured, true);
     assert.equal(anon.body.authenticated, false);

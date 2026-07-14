@@ -4,8 +4,9 @@ Browser app for selecting and reviewing geographic points on a Google Maps satel
 
 ## Current phase: P6 — Admin config
 
-- In-app **Admin** tab (hidden unless `ADMIN_USERNAME` and `ADMIN_PASSWORD` are set)
-- Login → HttpOnly session cookie; edit runtime defaults; save writes `config/app-config.md`
+- In-app **Admin** tab (hidden unless `ADMIN_USERNAME` and a 12+ char `ADMIN_PASSWORD` are set)
+- Login → HttpOnly session cookie (prefer `ADMIN_SESSION_SECRET`); edit runtime defaults; save writes `config/app-config.md` atomically
+- Login rate-limited (5/min/IP); timing-safe credential compare; `trust proxy` for Secure cookies on Render
 - After save: **Apply & reload** so this browser uses the new defaults
 - P7 planned: Render persistent disk so Admin edits survive redeploy
 
@@ -30,7 +31,15 @@ cp .env.example .env
 | `GOOGLE_MAPS_API_KEY` | HTTP referrers — e.g. `http://localhost:3000/*` | Maps JavaScript API |
 | `GEOCODING_API_KEY` | IP (or none for local) | Geocoding API |
 
-4. Set both in `.env`. Optionally set `ADMIN_USERNAME` / `ADMIN_PASSWORD` to enable the Admin tab. Then:
+4. Set both in `.env`. Optionally set Admin env vars to enable the Admin tab:
+
+| Env var | Notes |
+|---------|-------|
+| `ADMIN_USERNAME` | Shared admin username |
+| `ADMIN_PASSWORD` | ≥12 characters or Admin stays disabled |
+| `ADMIN_SESSION_SECRET` | ≥16 characters recommended; signs session cookies |
+
+Then:
 
 ```bash
 npm install
@@ -41,7 +50,7 @@ npm start
 Open [http://localhost:3000](http://localhost:3000).
 
 Without `GEOCODING_API_KEY`, map click and lat/long still work; address geocode returns 503.
-Without Admin credentials, the Admin tab stays hidden.
+Without Admin credentials (or with a password shorter than 12 chars), the Admin tab stays hidden.
 
 ### Key-restriction verification
 
@@ -85,7 +94,8 @@ On desktop Chrome, Firefox, and Safari (latest):
 3. Set:
    - `GOOGLE_MAPS_API_KEY` — referrer-restrict to your Render domain + Maps JavaScript API
    - `GEOCODING_API_KEY` — Geocoding API only; IP-restrict to Render egress when practical
-   - `ADMIN_USERNAME` / `ADMIN_PASSWORD` — required to enable the Admin tab
+   - `ADMIN_USERNAME` / `ADMIN_PASSWORD` (≥12 chars) — required to enable the Admin tab
+   - `ADMIN_SESSION_SECRET` (≥16 chars) — recommended; signs Admin session cookies
 4. Deploy, then run the key-restriction checks against the live URL (`/api/health?probe=geocode`).
 
 **Note:** Admin saves write `config/app-config.md` on the instance filesystem. Without a persistent disk (P7), those edits may be lost on redeploy/restart.

@@ -29,14 +29,15 @@ Exit criteria are in the PRD §9. Demo each phase before expanding scope.
 - **Secrets:**
   - `GOOGLE_MAPS_API_KEY` — browser Maps JS key; exposed via `/api/config` by design. Restrict by HTTP referrer + Maps JavaScript API only.
   - `GEOCODING_API_KEY` — server only. Never send to the client. Restrict by IP + Geocoding API.
-  - `ADMIN_USERNAME` / `ADMIN_PASSWORD` — gate Admin tab + `/api/admin/*`. Both required or Admin stays hidden.
+  - `ADMIN_USERNAME` / `ADMIN_PASSWORD` — gate Admin tab + `/api/admin/*`. Password must be ≥12 chars. Both required or Admin stays hidden.
+  - `ADMIN_SESSION_SECRET` — recommended (≥16 chars); signs Admin session cookies. If omitted, a password-derived key is used with a warning.
   - Never commit `.env`.
 - **Persistence:** Client download/upload of target JSON only. Config defaults live in `config/app-config.md` (P6 Admin writes the same file). Render disk is ephemeral until P7 — Admin edits may be lost on redeploy.
 - **Config defaults:** Edit `config/app-config.md` (YAML frontmatter) or use Admin. `config.js` loads/validates/serializes it. Keep invariant `minSelections ≤ maxSelections < dotCount`. Do not invent a second config store.
 - **Maps:** Default `mapType` is `hybrid`.
 - **Recenter:** When `confirmOnRecenter` is true and ≥1 candidate is selected, prompt before center/radius change or Reload targets.
 - **Targets (P2/P3):** Operator clicks **Load targets** (no auto-scatter). Use `public/js/dots.js` — uniform disk + `minDotSpacingMeters` rejection (close ok, overlap not). Center/radius change clears candidates until Load again. Selection requires `minSelections`–`maxSelections` (default 1–12). When `blockExtraSelections` is true (default), selecting above max is blocked; when false, extras are allowed but Save stays gated to the range.
-- **Admin (P6):** Login form → HttpOnly session cookie. Editable: radius, counts, block extras, spacing, map type, confirm-on-recenter, default center. After save, **Apply & reload**. No OAuth.
+- **Admin (P6):** Login form → HttpOnly session cookie (HMAC via `ADMIN_SESSION_SECRET` or password-derived fallback). Password ≥12 chars. Timing-safe credential compare; 5 logins/min/IP. Atomic MD writes. `trust proxy` for Secure cookies on Render. After save, **Apply & reload**. No OAuth.
 ## Repo layout
 
 ```
@@ -44,7 +45,8 @@ server.js                 Express entry: static + API routes (ESM)
 config.js                 Loads/writes config/app-config.md → app config
 config/app-config.md      Human-editable runtime defaults
 lib/geocode.js            Geocoding proxy helper (server)
-lib/admin-session.js      Admin session cookie sign/verify
+lib/admin-session.js      Admin session cookie sign/verify + auth gates
+lib/login-rate-limit.js   In-memory Admin login rate limiter
 public/
   index.html              Tab shell + forms (Selection / Review / Admin)
   css/app.css             App styles
@@ -130,7 +132,7 @@ npm start              # http://localhost:3000
 ```
 
 Without `GEOCODING_API_KEY`, map click and lat/long still work; address geocode returns 503.
-Without both `ADMIN_USERNAME` and `ADMIN_PASSWORD`, the Admin tab stays hidden.
+Without both `ADMIN_USERNAME` and `ADMIN_PASSWORD` (12+ chars), the Admin tab stays hidden. Set `ADMIN_SESSION_SECRET` (16+) in production.
 
 ## When changing behavior
 

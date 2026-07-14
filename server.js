@@ -12,13 +12,17 @@ import {
 } from './config.js';
 import {
   ADMIN_COOKIE,
+  ADMIN_PASSWORD_MIN_LENGTH,
+  credentialsMatch,
   createSessionToken,
   parseCookies,
   requestIsSecure,
+  resolveAdminAuth,
   sessionClearCookieHeader,
   sessionSetCookieHeader,
   verifySessionToken,
 } from './lib/admin-session.js';
+import { createLoginRateLimiter } from './lib/login-rate-limit.js';
 import { geocodeAddress, reverseGeocode } from './lib/geocode.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,8 +36,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  *   writeConfigFn?: (config: ReturnType<typeof getAppConfig>) => void,
  *   adminUsername?: string,
  *   adminPassword?: string,
+ *   adminSessionSecret?: string,
+ *   loginRateLimiter?: ReturnType<typeof createLoginRateLimiter>,
  *   geocodeFn?: typeof geocodeAddress,
  *   reverseGeocodeFn?: typeof reverseGeocode,
+ *   warn?: (message: string) => void,
  * }} [deps]
  */
 export function createApp(deps = {}) {
@@ -55,18 +62,33 @@ export function createApp(deps = {}) {
     });
   const geocodeFn = deps.geocodeFn || geocodeAddress;
   const reverseGeocodeFn = deps.reverseGeocodeFn || reverseGeocode;
+  const warn = deps.warn || ((message) => console.warn(message));
 
-  const adminUsername =
-    deps.adminUsername !== undefined
-      ? deps.adminUsername
-      : process.env.ADMIN_USERNAME || '';
-  const adminPassword =
-    deps.adminPassword !== undefined
-      ? deps.adminPassword
-      : process.env.ADMIN_PASSWORD || '';
-  const adminConfigured = Boolean(adminUsername && adminPassword);
+  const adminAuth = resolveAdminAuth({
+    username:
+      deps.adminUsername !== undefined
+        ? deps.adminUsername
+        : process.env.ADMIN_USERNAME || '',
+    password:
+      deps.adminPassword !== undefined
+        ? deps.adminPassword
+        : process.env.ADMIN_PASSWORD || '',
+    sessionSecret:
+      deps.adminSessionSecret !== undefined
+        ? deps.adminSessionSecret
+        : process.env.ADMIN_SESSION_SECRET || '',
+    warn,
+  });
+  const adminConfigured = adminAuth.configured;
+  const adminUsername = adminAuth.username;
+  const adminPassword = adminAuth.password;
+  const adminSessionSecret = adminAuth.sessionSecret;
+  const loginRateLimiter =
+    deps.loginRateLimiter || createLoginRateLimiter({ limit: 5, windowMs: 60_000 });
 
   const app = express();
+  // Render (and most PaaS) terminate TLS upstream — needed for Secure cookies + req.ip.
+  app.set('trust proxy', 1);
   app.use(express.json({ limit: '32kb' }));
   app.use(express.static(path.join(__dirname, 'public')));
 
@@ -79,7 +101,7 @@ export function createApp(deps = {}) {
     return verifySessionToken(
       cookies[ADMIN_COOKIE],
       adminUsername,
-      adminPassword
+      adminSessionSecret
     );
   }
 
@@ -91,13 +113,21 @@ export function createApp(deps = {}) {
   function requireAdmin(req, res, next) {
     if (!adminConfigured) {
       return res.status(503).json({
-        error: 'Admin is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD.',
+        error:
+          'Admin is not configured. Set ADMIN_USERNAME, ADMIN_PASSWORD (12+ chars), and preferably ADMIN_SESSION_SECRET (16+ chars).',
       });
     }
     if (!isAdminAuthenticated(req)) {
       return res.status(401).json({ error: 'Admin login required.' });
     }
     return next();
+  }
+
+  /**
+   * @param {import('express').Request} req
+   */
+  function clientKey(req) {
+    return req.ip || req.socket?.remoteAddress || 'unknown';
   }
 
   /** Liveness for Render / local smoke checks. Use ?probe=geocode for key smoke. */
@@ -170,7 +200,17 @@ export function createApp(deps = {}) {
   app.post('/api/admin/login', (req, res) => {
     if (!adminConfigured) {
       return res.status(503).json({
-        error: 'Admin is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD.',
+        error:
+          'Admin is not configured. Set ADMIN_USERNAME, ADMIN_PASSWORD (12+ chars), and preferably ADMIN_SESSION_SECRET (16+ chars).',
+      });
+    }
+
+    const rate = loginRateLimiter.check(clientKey(req));
+    if (!rate.ok) {
+      res.setHeader('Retry-After', String(rate.retryAfterSec));
+      return res.status(429).json({
+        error: 'Too many login attempts. Try again shortly.',
+        retryAfterSec: rate.retryAfterSec,
       });
     }
 
@@ -179,11 +219,13 @@ export function createApp(deps = {}) {
     const password =
       typeof req.body?.password === 'string' ? req.body.password : '';
 
-    if (username !== adminUsername || password !== adminPassword) {
+    if (
+      !credentialsMatch(username, password, adminUsername, adminPassword)
+    ) {
       return res.status(401).json({ error: 'Invalid username or password.' });
     }
 
-    const token = createSessionToken(adminUsername, adminPassword);
+    const token = createSessionToken(adminUsername, adminSessionSecret);
     const secure = requestIsSecure(req);
     res.setHeader('Set-Cookie', sessionSetCookieHeader(req, secure, token));
     return res.json({ ok: true, authenticated: true });
@@ -351,6 +393,16 @@ if (isMain) {
     if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
       console.warn(
         'Warning: ADMIN_USERNAME / ADMIN_PASSWORD not set — Admin tab stays hidden.'
+      );
+    } else if (
+      (process.env.ADMIN_PASSWORD || '').length < ADMIN_PASSWORD_MIN_LENGTH
+    ) {
+      console.warn(
+        `Warning: ADMIN_PASSWORD must be at least ${ADMIN_PASSWORD_MIN_LENGTH} characters — Admin stays disabled.`
+      );
+    } else if (!process.env.ADMIN_SESSION_SECRET) {
+      console.warn(
+        'Warning: ADMIN_SESSION_SECRET not set — using a password-derived signing key. Set ADMIN_SESSION_SECRET in production.'
       );
     }
   });
