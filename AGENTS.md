@@ -47,10 +47,15 @@ public/
   css/app.css             App styles
   js/
     app.js                Boot / map lifecycle
-    selection.js          Selection-tab center, circle, forms, candidates, export wiring
+    app-types.js          Shared AppConfig typedef
+    selection.js          Selection-tab center, radius, candidates, export
+    selection-forms.js    Selection location / radius form wiring
     selection-logic.js    Pure selection helpers (testable)
+    review.js             Review-tab upload, render, InfoWindows
+    review-logic.js       Pure parse + Review display helpers (testable)
+    map-radius-overlay.js Shared center pin + radius circle + fitBounds
     dots.js               Candidate dot generation (uniform disk)
-    dot-markers.js        Selected / unselected marker icons
+    dot-markers.js        Candidate + saved-target marker icons
     targeting.js          Targeting-list UI (P3)
     schema.js             §4 JSON build + validate (P3/P4)
     download.js           Client JSON download helper
@@ -61,7 +66,7 @@ public/
     constants.js          Miles/meters constants
     dom.js                Small DOM helpers
     ui.js                 Field/map error helpers
-test/                     node:test coverage (dots, geo, selection-logic, schema, config)
+test/                     node:test (dots, geo, selection-logic, schema, review-logic, config)
 render.yaml               Render Blueprint
 target-selection-app-PRD.md
 ```

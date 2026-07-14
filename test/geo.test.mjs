@@ -36,4 +36,10 @@ describe('validateLatLng', () => {
     assert.match(validateLatLng(91, 0) || '', /Latitude/);
     assert.match(validateLatLng(0, 181) || '', /Longitude/);
   });
+
+  it('rejects non-numeric and non-finite values', () => {
+    assert.match(validateLatLng('37', -121) || '', /numbers/);
+    assert.match(validateLatLng(Number.NaN, 0) || '', /finite/);
+  });
 });
+

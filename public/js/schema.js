@@ -1,8 +1,9 @@
 /**
  * Saved-target JSON schema (§4) — build + validate.
- * Shared by P3 export and (later) P4 upload.
+ * Shared by P3 export and P4 upload.
  */
 
+import { validateLatLng } from './geo.js';
 import { resolveTargetName } from './place-names.js';
 
 /** @typedef {{ lat: number, lng: number }} LatLng */
@@ -250,22 +251,6 @@ export function buildTargetFile(input) {
 }
 
 /**
- * @param {unknown} value
- * @returns {string | null}
- */
-function latLngError(lat, lng) {
-  if (typeof lat !== 'number' || typeof lng !== 'number') {
-    return 'lat/lng must be numbers.';
-  }
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return 'lat/lng must be finite numbers.';
-  }
-  if (lat < -90 || lat > 90) return 'lat must be between −90 and 90.';
-  if (lng < -180 || lng > 180) return 'lng must be between −180 and 180.';
-  return null;
-}
-
-/**
  * Validate a parsed JSON document against §4 (P3 build + P4 upload).
  * Unknown keys are ignored; missing/invalid required fields fail.
  *
@@ -295,7 +280,7 @@ export function validateTargetFile(raw) {
     return { ok: false, message: 'center is required.' };
   }
   const c = /** @type {Record<string, unknown>} */ (center);
-  const centerErr = latLngError(c.lat, c.lng);
+  const centerErr = validateLatLng(c.lat, c.lng);
   if (centerErr) {
     return { ok: false, message: `center: ${centerErr}` };
   }
@@ -368,7 +353,7 @@ export function validateTargetFile(raw) {
       };
     }
 
-    const posErr = latLngError(t.lat, t.lng);
+    const posErr = validateLatLng(t.lat, t.lng);
     if (posErr) {
       return { ok: false, message: `targets[${i}]: ${posErr}` };
     }

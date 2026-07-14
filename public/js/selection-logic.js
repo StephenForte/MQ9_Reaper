@@ -43,11 +43,6 @@ export function isValidSelection(dots, min, max) {
   return count >= min && count <= max;
 }
 
-/** @deprecated Prefer isValidSelection — kept for older tests during transition. */
-export function isExactSelection(dots, required) {
-  return selectedCount(dots) === required;
-}
-
 /**
  * @param {number} currentSelected
  * @param {number} max

@@ -31,7 +31,7 @@ Later: an **Admin** section in the app will edit these in-app (see PRD phase **P
 | `radiusUnit` | `miles` only in v1. |
 | `confirmOnRecenter` | If `true`, changing center/radius or reloading targets prompts when ≥1 target is selected. |
 | `seededRng` | If `false`, export writes `seed: null`. Seeded RNG is not planned for v1. |
-| `defaultCenterLat` / `defaultCenterLng` | Startup / Review-placeholder map center. |
+| `defaultCenterLat` / `defaultCenterLng` | Startup map center before Selection is set; Review uses the uploaded file’s center after load. |
 
 ## Invariant
 

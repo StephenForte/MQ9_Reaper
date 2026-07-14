@@ -1,15 +1,15 @@
-import { METERS_PER_MILE } from './constants.js';
 import { confirmAction } from './confirm.js';
 import { byId, byIdAs } from './dom.js';
 import { downloadJson, buildTargetsFilename } from './download.js';
 import { generateCandidateDots } from './dots.js';
 import { iconForDot } from './dot-markers.js';
-import { boundsForRadius, parseCoordinate, validateLatLng } from './geo.js';
+import { createRadiusOverlay } from './map-radius-overlay.js';
 import {
   regionLabelFromGeocode,
   specificPlaceName,
 } from './place-names.js';
 import { buildTargetFile, rowsFromSelectedDots } from './schema.js';
+import { wireSelectionForms } from './selection-forms.js';
 import {
   isValidSelection,
   labelForCenterSource,
@@ -21,23 +21,9 @@ import { createTargetingController } from './targeting.js';
 import { setFieldError } from './ui.js';
 
 /**
- * @typedef {{ lat: number, lng: number }} LatLng
+ * @typedef {import('./app-types.js').LatLng} LatLng
+ * @typedef {import('./app-types.js').AppConfig} AppConfig
  * @typedef {'address' | 'click' | 'latlng' | 'default'} CenterSource
- * @typedef {{
- *   mapsApiKey: string,
- *   defaults: {
- *     radiusMiles: number,
- *     dotCount: number,
- *     minSelections: number,
- *     maxSelections: number,
- *     minDotSpacingMeters: number,
- *     mapType: string,
- *     radiusUnit: string,
- *     confirmOnRecenter: boolean,
- *     seededRng: boolean,
- *     center: LatLng,
- *   }
- * }} AppConfig
  * @typedef {{ id: string, lat: number, lng: number, selected: boolean }} CandidateDot
  */
 
@@ -47,10 +33,8 @@ import { setFieldError } from './ui.js';
 export function createSelectionController() {
   /** @type {google.maps.Map | null} */
   let map = null;
-  /** @type {google.maps.Marker | null} */
-  let centerMarker = null;
-  /** @type {google.maps.Circle | null} */
-  let radiusCircle = null;
+  /** @type {ReturnType<typeof createRadiusOverlay> | null} */
+  let overlay = null;
   /** @type {LatLng | null} */
   let currentCenter = null;
   /** @type {CenterSource} */
@@ -292,7 +276,7 @@ export function createSelectionController() {
    * @returns {Promise<boolean>}
    */
   async function setCenter(center, source, opts = {}) {
-    if (!map) return false;
+    if (!map || !overlay) return false;
 
     const {
       fit = true,
@@ -317,45 +301,12 @@ export function createSelectionController() {
       regionLabel = await resolveRegionLabel(currentCenter);
     }
 
-    const radiusMeters = currentRadiusMiles * METERS_PER_MILE;
-
-    if (!centerMarker) {
-      centerMarker = new google.maps.Marker({
-        map,
-        position: currentCenter,
-        title: 'Center',
-        zIndex: 2,
-      });
-    } else {
-      centerMarker.setPosition(currentCenter);
-    }
-
-    if (!radiusCircle) {
-      radiusCircle = new google.maps.Circle({
-        map,
-        center: currentCenter,
-        radius: radiusMeters,
-        strokeColor: '#c4a35a',
-        strokeOpacity: 0.95,
-        strokeWeight: 2,
-        fillColor: '#c4a35a',
-        fillOpacity: 0.12,
-        clickable: false,
-        zIndex: 1,
-      });
-    } else {
-      radiusCircle.setCenter(currentCenter);
-      radiusCircle.setRadius(radiusMeters);
-    }
-
-    if (fit) {
-      map.fitBounds(boundsForRadius(currentCenter, radiusMeters));
-    }
+    overlay.setArea(currentCenter, currentRadiusMiles, { fit });
+    updateMeta();
 
     if (clearCandidates && !samePoint) {
       clearCandidateMarkers();
     } else {
-      updateMeta();
       updateSelectionUi();
     }
 
@@ -363,10 +314,7 @@ export function createSelectionController() {
   }
 
   function refit() {
-    if (!map || !currentCenter) return;
-    map.fitBounds(
-      boundsForRadius(currentCenter, currentRadiusMiles * METERS_PER_MILE)
-    );
+    overlay?.refit();
   }
 
   /**
@@ -376,6 +324,7 @@ export function createSelectionController() {
   function attachMap(mapInstance, runtimeConfig) {
     map = mapInstance;
     config = runtimeConfig;
+    overlay = createRadiusOverlay(map);
 
     map.addListener('click', (event) => {
       if (!event.latLng) return;
@@ -566,109 +515,15 @@ export function createSelectionController() {
   }
 
   function wireForms() {
-    const addressForm = byIdAs('form-address');
-    const latlngForm = byIdAs('form-latlng');
-    const radiusForm = byIdAs('form-radius');
-    const geocodeBtn = byIdAs('btn-geocode');
-    const loadDotsBtn = byIdAs('btn-load-dots');
-    const saveBtn = byIdAs('btn-save-targets');
-    const downloadBtn = byIdAs('btn-download-json');
-
-    addressForm?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      setFieldError('address-error', '');
-      setFieldError('latlng-error', '');
-
-      const input = byIdAs('input-address');
-      const q = input?.value.trim() || '';
-      if (!q) {
-        setFieldError('address-error', 'Enter a street address.');
-        return;
-      }
-
-      if (geocodeBtn) geocodeBtn.disabled = true;
-
-      try {
-        const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
-        const body = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          setFieldError(
-            'address-error',
-            body.error || "Couldn't find that address"
-          );
-          return;
-        }
-
-        const label = regionLabelFromGeocode(
-          body.addressComponents || [],
-          body.formattedAddress || q
-        );
-        await setCenter(
-          { lat: body.lat, lng: body.lng },
-          'address',
-          { regionLabel: label }
-        );
-      } catch (err) {
-        console.error(err);
-        setFieldError(
-          'address-error',
-          'Geocoding request failed. Try again, or use map click / lat-long.'
-        );
-      } finally {
-        if (geocodeBtn) geocodeBtn.disabled = false;
-      }
+    wireSelectionForms({
+      setCenter,
+      applyRadiusFromInput,
+      loadDots,
+      saveTargets,
+      downloadTargets,
+      updateMeta,
+      updateSelectionUi,
     });
-
-    latlngForm?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      setFieldError('latlng-error', '');
-      setFieldError('address-error', '');
-
-      const latInput = byIdAs('input-lat');
-      const lngInput = byIdAs('input-lng');
-
-      const lat = parseCoordinate(latInput?.value || '');
-      const lng = parseCoordinate(lngInput?.value || '');
-      const rangeError =
-        lat === null || lng === null
-          ? 'Enter numeric latitude and longitude.'
-          : validateLatLng(lat, lng);
-
-      if (rangeError) {
-        setFieldError('latlng-error', rangeError);
-        return;
-      }
-
-      const applied = await setCenter(
-        { lat: /** @type {number} */ (lat), lng: /** @type {number} */ (lng) },
-        'latlng'
-      );
-      if (!applied) {
-        updateMeta();
-      }
-    });
-
-    radiusForm?.addEventListener('submit', (event) => {
-      event.preventDefault();
-      void applyRadiusFromInput();
-    });
-
-    loadDotsBtn?.addEventListener('click', () => {
-      void loadDots();
-    });
-
-    saveBtn?.addEventListener('click', () => {
-      if (saveBtn.disabled) return;
-      void saveTargets();
-    });
-
-    downloadBtn?.addEventListener('click', () => {
-      if (downloadBtn.disabled) return;
-      downloadTargets();
-    });
-
-    updateSelectionUi();
   }
 
   return {

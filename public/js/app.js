@@ -1,25 +1,11 @@
 import { ensureMapsApi } from './maps-loader.js';
+import { createReviewController } from './review.js';
 import { createSelectionController } from './selection.js';
 import { wireTabs } from './tabs.js';
 import { hideMapError, showMapError } from './ui.js';
 
 /**
- * @typedef {{ lat: number, lng: number }} LatLng
- * @typedef {{
- *   mapsApiKey: string,
- *   defaults: {
- *     radiusMiles: number,
- *     dotCount: number,
- *     minSelections: number,
- *     maxSelections: number,
- *     minDotSpacingMeters: number,
- *     mapType: string,
- *     radiusUnit: string,
- *     confirmOnRecenter: boolean,
- *     seededRng: boolean,
- *     center: LatLng,
- *   }
- * }} AppConfig
+ * @typedef {import('./app-types.js').AppConfig} AppConfig
  */
 
 /** @type {AppConfig | null} */
@@ -29,6 +15,7 @@ let runtimeConfig = null;
 const mapsByPanel = new Map();
 
 const selection = createSelectionController();
+const review = createReviewController();
 
 async function fetchConfig() {
   const res = await fetch('/api/config');
@@ -67,11 +54,7 @@ function initMap(panel, config) {
   if (panel === 'select') {
     selection.attachMap(map, config);
   } else {
-    new google.maps.Marker({
-      map,
-      position: config.defaults.center,
-      title: 'Default center (Review arrives in Phase 4)',
-    });
+    review.attachMap(map, config);
   }
 
   requestAnimationFrame(() => {
@@ -79,7 +62,7 @@ function initMap(panel, config) {
     if (panel === 'select') {
       selection.refit();
     } else {
-      map.setCenter(config.defaults.center);
+      review.refit();
     }
   });
 }
@@ -122,8 +105,8 @@ function onTabActivate(tabName) {
       google.maps.event.trigger(map, 'resize');
       if (tabName === 'select') {
         selection.refit();
-      } else if (runtimeConfig) {
-        map.setCenter(runtimeConfig.defaults.center);
+      } else {
+        review.refit();
       }
     });
     return;
@@ -134,6 +117,7 @@ function onTabActivate(tabName) {
 async function boot() {
   wireTabs({ onActivate: onTabActivate });
   selection.wireForms();
+  review.wireUpload();
 
   try {
     runtimeConfig = await fetchConfig();

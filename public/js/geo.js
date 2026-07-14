@@ -40,13 +40,17 @@ export function parseCoordinate(raw) {
 }
 
 /**
- * @param {number} lat
- * @param {number} lng
+ * Shared lat/lng range check (forms + §4 schema).
+ * @param {unknown} lat
+ * @param {unknown} lng
  * @returns {string | null} error message, or null if valid
  */
 export function validateLatLng(lat, lng) {
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    return 'lat/lng must be numbers.';
+  }
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return 'Enter numeric latitude and longitude.';
+    return 'lat/lng must be finite numbers.';
   }
   if (lat < -90 || lat > 90) {
     return 'Latitude must be between −90 and 90.';

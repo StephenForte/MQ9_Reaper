@@ -260,7 +260,41 @@ describe('validateTargetFile', () => {
     assert.equal(result.ok, false);
     assert.match(result.message, /Duplicate/);
   });
+
+  it('rejects unsupported version and invalid center source', () => {
+    assert.match(
+      validateTargetFile({ ...valid, version: '9.9' }).message || '',
+      /Unsupported version/
+    );
+    assert.match(
+      validateTargetFile({
+        ...valid,
+        center: { ...valid.center, source: 'gps' },
+      }).message || '',
+      /center\.source/
+    );
+  });
+
+  it('rejects non-object root and bad generation fields', () => {
+    assert.equal(validateTargetFile([]).ok, false);
+    assert.equal(validateTargetFile(null).ok, false);
+    assert.match(
+      validateTargetFile({
+        ...valid,
+        generation: { ...valid.generation, dotCount: 0 },
+      }).message || '',
+      /dotCount/
+    );
+    assert.match(
+      validateTargetFile({
+        ...valid,
+        generation: { ...valid.generation, seed: 'abc' },
+      }).message || '',
+      /seed/
+    );
+  });
 });
+
 
 describe('buildTargetsFilename', () => {
   it('uses a stable mq9-targets prefix and Zulu timestamp', () => {

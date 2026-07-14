@@ -1,5 +1,5 @@
 /**
- * Candidate-dot marker icons (P2). SVG data URLs keep Maps Marker styling local.
+ * Marker icons (P2 candidates / P4 saved targets). SVG data URLs keep styling local.
  */
 
 const UNSELECTED = {
@@ -14,6 +14,13 @@ const SELECTED = {
   r: 7,
 };
 
+/** Distinct from candidate dots — diamond for Review saved targets. */
+const SAVED = {
+  fill: '#5b8def',
+  stroke: '#d6e4ff',
+  size: 18,
+};
+
 /**
  * @param {{ fill: string, stroke: string, r: number }} style
  * @returns {string}
@@ -25,8 +32,21 @@ function circleSvgDataUrl(style) {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
+/**
+ * @param {{ fill: string, stroke: string, size: number }} style
+ * @returns {string}
+ */
+function diamondSvgDataUrl(style) {
+  const s = style.size;
+  const mid = s / 2;
+  const inset = 2.5;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 ${s} ${s}"><polygon points="${mid},${inset} ${s - inset},${mid} ${mid},${s - inset} ${inset},${mid}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="1.5"/></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
 const UNSELECTED_URL = circleSvgDataUrl(UNSELECTED);
 const SELECTED_URL = circleSvgDataUrl(SELECTED);
+const SAVED_URL = diamondSvgDataUrl(SAVED);
 
 /**
  * @param {boolean} selected
@@ -37,6 +57,19 @@ export function iconForDot(selected) {
   const size = style.r * 2 + 4;
   return {
     url: selected ? SELECTED_URL : UNSELECTED_URL,
+    scaledSize: new google.maps.Size(size, size),
+    anchor: new google.maps.Point(size / 2, size / 2),
+  };
+}
+
+/**
+ * Saved-target marker for the Review tab (distinct from candidate dots).
+ * @returns {google.maps.Icon}
+ */
+export function iconForSavedTarget() {
+  const size = SAVED.size;
+  return {
+    url: SAVED_URL,
     scaledSize: new google.maps.Size(size, size),
     anchor: new google.maps.Point(size / 2, size / 2),
   };

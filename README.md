@@ -2,14 +2,14 @@
 
 Two-tab web app for selecting and reviewing geographic points on a Google Maps satellite view. Full product scope: `target-selection-app-PRD.md`. Agent/contributor contract: `AGENTS.md`.
 
-## Current phase: P3 — Metadata + export
+## Current phase: P4 — Review tab
 
-- **Load targets** / select between `minSelections` and `maxSelections` (default 1–12)
-- **Save Targets** opens the targeting list with defaults (place name or `{Region} Target N`, confidence 1, priority medium)
-- **Download JSON** exports a §4 schema file (`seed: null`; `requiredSelections` = actual count)
-- Changing the shortlist after Save Targets marks the list stale until you Save again
+- Upload a §4 targets JSON; parse/validate before render
+- Re-renders saved center + radius circle and plots N diamond markers
+- Click a marker or side-panel row for name / confidence / priority (InfoWindow)
+- Invalid uploads keep the last good render and show an inline error
 
-P1 location inputs remain the base. Review upload is P4.
+P3 export still produces the file Review consumes.
 
 ## Local setup
 
@@ -42,7 +42,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Without `GEOCODING_API_KEY`, map click and lat/long still work; address geocode returns 503.
 
-P3 exit check: center → **Load targets** → select 1–N → **Save Targets** → confirm defaults / edit → **Download JSON**.
+P4 exit check: export JSON from Selection → Review tab → upload → confirm framing + clickable target details.
 
 ## Deploy on Render
 
@@ -52,7 +52,7 @@ P3 exit check: center → **Load targets** → select 1–N → **Save Targets**
    - `GOOGLE_MAPS_API_KEY` — referrer-restrict to your Render domain + Maps JavaScript API
    - `GEOCODING_API_KEY` — Geocoding API only; IP-restrict to Render egress when practical
    - `ADMIN_USERNAME` / `ADMIN_PASSWORD` — optional until P6 Admin; set now if you want them ready on Render
-4. Deploy. P3 exit check: export a complete targets JSON from the Selection tab.
+4. Deploy. P4 exit check: export from Selection, upload in Review, confirm markers + InfoWindows.
 
 ## API
 
@@ -73,8 +73,8 @@ lib/geocode.js         Geocode proxy helper
 public/
   index.html           Two-tab shell + location + candidates + targeting UI
   css/app.css
-  js/                  ES modules (app, selection, schema, targeting, …)
-test/                  node:test (dots, geo, selection-logic, schema, config)
+  js/                  ES modules (app, selection, review, schema, …)
+test/                  node:test (dots, geo, selection-logic, schema, review-logic, config)
 render.yaml            Render Blueprint
 AGENTS.md              Coding / phase standards
 ```

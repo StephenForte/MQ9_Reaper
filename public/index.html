@@ -239,10 +239,78 @@
           <aside class="side-panel">
             <h2 class="side-title">Review</h2>
             <p class="side-copy">
-              Upload a saved targets JSON in Phase 4. Until then this map shows
-              the default center only.
+              Upload a saved targets JSON to re-render the original center,
+              radius, and annotated points. Read-only — no editing or re-export.
             </p>
-            <p class="hint">Placeholder — no upload yet.</p>
+
+            <section class="side-section" aria-labelledby="review-upload-heading">
+              <h3 id="review-upload-heading" class="side-section-title">
+                Upload
+              </h3>
+              <label class="field">
+                <span class="field-label">Targets JSON</span>
+                <input
+                  id="input-review-file"
+                  name="reviewFile"
+                  type="file"
+                  accept=".json,application/json"
+                />
+              </label>
+              <p id="review-error" class="field-error" role="alert" hidden></p>
+              <p id="review-status" class="hint hint-tight">No file loaded.</p>
+            </section>
+
+            <section
+              id="section-review-meta"
+              class="side-section"
+              aria-labelledby="review-meta-heading"
+              hidden
+            >
+              <h3 id="review-meta-heading" class="side-section-title">
+                File summary
+              </h3>
+              <dl class="meta-list">
+                <div>
+                  <dt>File</dt>
+                  <dd id="review-filename-label">—</dd>
+                </div>
+                <div>
+                  <dt>Created</dt>
+                  <dd id="review-created-label">—</dd>
+                </div>
+                <div>
+                  <dt>Center</dt>
+                  <dd id="review-center-label">—</dd>
+                </div>
+                <div>
+                  <dt>Source</dt>
+                  <dd id="review-source-label">—</dd>
+                </div>
+                <div>
+                  <dt>Radius</dt>
+                  <dd id="review-radius-label">—</dd>
+                </div>
+                <div>
+                  <dt>Targets</dt>
+                  <dd id="review-count-label">—</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section
+              id="section-review-targets"
+              class="side-section"
+              aria-labelledby="review-targets-heading"
+              hidden
+            >
+              <h3 id="review-targets-heading" class="side-section-title">
+                Targets
+              </h3>
+              <p class="hint">
+                Click a row or map marker to view name, confidence, and priority.
+              </p>
+              <div id="review-target-list" class="review-target-list"></div>
+            </section>
           </aside>
           <div class="map-stage">
             <div
