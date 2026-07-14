@@ -69,7 +69,7 @@ A single operator working through a location-scoping or site-selection workflow 
 
 1. Admin tab is visible; otherwise it stays hidden.
 2. Login form → signed HttpOnly session cookie (`ADMIN_SESSION_SECRET` recommended ≥16; password-derived fallback with warning if omitted).
-3. Authenticated operator can view/edit editable §6 parameters and save; server validates and writes `config/app-config.md` atomically.
+3. Authenticated operator can view/edit editable §6 parameters and save; server validates and writes the active config MD atomically (repo file locally; persistent disk on Render — P7).
 4. After save, operator must click **Apply & reload** for the open browser to pick up new defaults.
 5. Timing-safe credential compare; login rate limit 5/min/IP; `trust proxy` for Secure cookies on Render.
 
@@ -236,8 +236,8 @@ On Save Targets, reverse-geocode each selected point (and the center for a regio
 **Config delivery:**
 
 1. **File:** edit `config/app-config.md` (YAML frontmatter). Server loads it via `config.js`. Restart after manual edits. Guard invariant `minSelections ≤ maxSelections < dotCount`.
-2. **P6 Admin:** in-app Admin tab writes the same parameters to the same MD file (no separate product settings model). After save, **Apply & reload**. Credentials: `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
-3. **P7:** Render persistent disk so Admin writes survive redeploy.
+2. **P6 Admin:** in-app Admin tab writes the same parameters to the active config MD (no separate product settings model). After save, **Apply & reload**. Credentials: `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+3. **P7:** Render persistent disk at `/var/data` with `CONFIG_PATH=/var/data/app-config.md`. First boot seeds from the repo file if missing; Admin edits survive redeploy.
 
 Legacy config key `requiredSelections` (if present alone) maps to `maxSelections` with `minSelections` defaulting to 1.
 
@@ -283,7 +283,7 @@ Legacy config key `requiredSelections` (if present alone) maps to `maxSelections
 
 [ Render Web Service (Node/Express) ]
   ├─ serves public/
-  ├─ config.js ←→ config/app-config.md
+  ├─ config.js ←→ CONFIG_PATH or repo config/app-config.md (P7 disk at /var/data)
   ├─ /api/geocode* ──► Google Geocoding API
   └─ /api/admin/* (when ADMIN_* configured)
 ```
@@ -331,7 +331,7 @@ Evergreen desktop browsers, latest two versions: Chrome, Edge, Firefox, Safari. 
 | **P4 — Upload to Reaper** | Load and display. | File upload, schema validation, re-render center/radius, gold diamond markers, metadata info windows. | A P3 export loads and renders with clickable point details. | Done |
 | **P5 — Hardening** | Edge cases + polish. | §8.3 errors, browser pass, key-restriction verification, config MD validation messages; invalid upload clears prior render. | Every §8.3 row behaves as specified. | Done |
 | **P6 — Admin config** | In-app config editing. | Admin tab + session auth + atomic MD writes + Apply & reload (see §2.3). | Operator can change §6 parameters without editing files (disk ephemeral until P7). | Done |
-| **P7 — Persistent Admin config** | Survive redeploys. | Render persistent disk (or equivalent) so Admin writes to `config/app-config.md` survive redeploy; document mount + Blueprint. | Admin edits remain after redeploy. | Open |
+| **P7 — Persistent Admin config** | Survive redeploys. | Render Starter + disk at `/var/data`; `CONFIG_PATH`; first-boot seed from repo `config/app-config.md`; document Blueprint. | Admin edits remain after redeploy; `/api/health.configPersistent` true on Render. | Done |
 
 ---
 
@@ -351,7 +351,7 @@ Evergreen desktop browsers, latest two versions: Chrome, Edge, Firefox, Safari. 
 10. **Q4 — Dot overlap.** → Close allowed; overlap not. Rejection sampling with `minDotSpacingMeters` (default 50).
 11. **P6 Admin auth.** → `ADMIN_USERNAME` / `ADMIN_PASSWORD` (password ≥12 or Admin disabled). Prefer `ADMIN_SESSION_SECRET` (≥16). Timing-safe compare; 5 logins/min/IP; atomic MD writes; `trust proxy`. No OAuth/SSO in v1.
 12. **P6 Admin UX.** → Third **Admin** tab (hidden when credentials unset/invalid). Editable: radius, counts, block extras, spacing, map type, confirm-on-recenter, default center. Read-only in UI: `radiusUnit`, `seededRng`. Save writes MD; **Apply & reload** required. Disk persist deferred to **P7**.
-13. **P7.** → Render persistent disk (investigate) so Admin MD writes survive redeploy.
+13. **P7.** → Render Starter + persistent disk at `/var/data`; `CONFIG_PATH=/var/data/app-config.md`; first boot seeds from repo if missing; Admin edits survive redeploy.
 14. **Annotation defaults.** → Place/address name from reverse geocode when found, else `{Region} Target N`; confidence `1`; priority `medium`; non-blocking notice on reverse-geocode failure.
 15. **Blank map click with candidates loaded.** → Three-way dialog: Add custom target, Recenter, or Keep current.
 
@@ -367,4 +367,4 @@ Evergreen desktop browsers, latest two versions: Chrome, Edge, Firefox, Safari. 
 - [x] Architecture: Express on Render, Maps JS + Geocoding (forward/reverse), key handling, Admin APIs
 - [x] Non-functional: browser support, performance, §8.3 errors
 - [x] Open-questions / decided product decisions
-- [x] Phased plan with status (P0–P6 done; P7 open)
+- [x] Phased plan with status (P0–P7 done)

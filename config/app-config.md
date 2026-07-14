@@ -15,9 +15,9 @@ defaultCenterLng: -121.7124
 
 # App Config
 
-Human-editable runtime defaults for MQ9 Reaper. Edit here **or** use the in-app **Admin** tab (P6) when `ADMIN_USERNAME` / `ADMIN_PASSWORD` are set. Admin writes this same file; click **Apply & reload** in the UI after saving. Manual file edits still require a server restart.
+Human-editable runtime defaults for MQ9 Reaper. Edit here **or** use the in-app **Admin** tab when `ADMIN_USERNAME` / `ADMIN_PASSWORD` are set.
 
-On Render without a persistent disk, Admin writes may be lost on redeploy (see PRD **P7**).
+On Render (P7), Admin writes `/var/data/app-config.md` on the persistent disk (`CONFIG_PATH`). First boot copies this repo file onto the disk if missing; later Admin edits survive redeploy. Locally, without `CONFIG_PATH`, the server uses this file. After Admin save, click **Apply & reload** in the UI. Manual file edits still require a server restart.
 
 ## Fields
 

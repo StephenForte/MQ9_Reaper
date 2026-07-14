@@ -2,7 +2,8 @@ import { byId, byIdAs } from './dom.js';
 import { setFieldError, setStatusMessage } from './ui.js';
 
 /**
- * Admin tab: login + edit §6 config (P6). Save persists; Apply & reload takes effect.
+ * Admin tab: login + edit §6 config. Save writes the active config file;
+ * Apply & reload picks up new defaults in this browser.
  */
 
 /**
@@ -157,11 +158,6 @@ export function createAdminController() {
     setFieldError('admin-error', '');
     if (body.defaults && typeof body.defaults === 'object') {
       fillForm(/** @type {Record<string, unknown>} */ (body.defaults));
-    }
-    const note = byId('admin-persist-note');
-    if (note && typeof body.persistenceNote === 'string') {
-      note.textContent = body.persistenceNote;
-      note.hidden = false;
     }
   }
 

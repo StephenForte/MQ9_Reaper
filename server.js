@@ -3,9 +3,11 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import express from 'express';
 import {
-  CONFIG_MD,
+  bootstrapAppConfig,
   defaultsForClient,
   getAppConfig,
+  getConfigPath,
+  isConfigPersistent,
   mergeAdminConfigPatch,
   setAppConfig,
   writeAppConfig,
@@ -33,6 +35,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  *   geocodingKey?: string,
  *   config?: ReturnType<typeof getAppConfig>,
  *   configPath?: string,
+ *   configPersistent?: boolean,
  *   writeConfigFn?: (config: ReturnType<typeof getAppConfig>) => void,
  *   adminUsername?: string,
  *   adminPassword?: string,
@@ -54,7 +57,11 @@ export function createApp(deps = {}) {
       : process.env.GEOCODING_API_KEY || '';
   /** @type {ReturnType<typeof getAppConfig>} */
   let config = deps.config !== undefined ? deps.config : getAppConfig();
-  const configPath = deps.configPath || CONFIG_MD;
+  const configPath = deps.configPath || getConfigPath();
+  const configPersistent =
+    deps.configPersistent !== undefined
+      ? deps.configPersistent
+      : isConfigPersistent();
   const writeConfig =
     deps.writeConfigFn ||
     ((next) => {
@@ -137,6 +144,7 @@ export function createApp(deps = {}) {
       mapsKeyConfigured: Boolean(mapsKey),
       geocodingConfigured: Boolean(geocodingKey),
       adminConfigured,
+      configPersistent,
     };
 
     if (req.query.probe !== 'geocode') {
@@ -263,8 +271,6 @@ export function createApp(deps = {}) {
         'defaultCenterLng',
       ],
       readOnly: ['radiusUnit', 'seededRng'],
-      persistenceNote:
-        'Saved to config/app-config.md on this server. On Render without a persistent disk, edits may be lost on redeploy (see PRD P7).',
     });
   });
 
@@ -376,10 +382,16 @@ const isMain =
   import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 
 if (isMain) {
+  const boot = bootstrapAppConfig();
   const PORT = process.env.PORT || 3000;
   const app = createApp();
   app.listen(PORT, () => {
     console.log(`MQ9 Reaper listening on http://localhost:${PORT}`);
+    console.log(
+      `Config: ${boot.path}${boot.seeded ? ' (seeded from repo)' : ''}${
+        boot.persistent ? ' [persistent]' : ''
+      }`
+    );
     if (!process.env.GOOGLE_MAPS_API_KEY) {
       console.warn(
         'Warning: GOOGLE_MAPS_API_KEY is not set — map will show an error state.'
