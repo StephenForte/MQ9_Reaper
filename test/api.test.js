@@ -143,4 +143,90 @@ describe('/api/geocode', () => {
     assert.equal(body.error, "Couldn't find that address");
     assert.equal(body.status, 'ZERO_RESULTS');
   });
+
+  it('returns lat/lng on success', async () => {
+    const app = createApp({
+      mapsKey: '',
+      geocodingKey: 'geo',
+      config: stubConfig,
+      geocodeFn: async (q) => ({
+        ok: true,
+        lat: 10,
+        lng: 20,
+        formattedAddress: q,
+        addressComponents: [],
+        types: ['street_address'],
+      }),
+    });
+    const { status, body } = await getJson(app, '/api/geocode?q=Home');
+    assert.equal(status, 200);
+    assert.equal(body.lat, 10);
+    assert.equal(body.lng, 20);
+    assert.equal(body.formattedAddress, 'Home');
+  });
+});
+
+describe('/api/geocode/reverse', () => {
+  it('returns 400 for missing or out-of-range coordinates', async () => {
+    const app = createApp({
+      mapsKey: '',
+      geocodingKey: 'geo',
+      config: stubConfig,
+    });
+    const missing = await getJson(app, '/api/geocode/reverse');
+    assert.equal(missing.status, 400);
+    const bad = await getJson(app, '/api/geocode/reverse?lat=91&lng=0');
+    assert.equal(bad.status, 400);
+    assert.match(bad.body.error, /out of range/);
+  });
+
+  it('returns 503 when geocoding is not configured', async () => {
+    const app = createApp({
+      mapsKey: '',
+      geocodingKey: '',
+      config: stubConfig,
+    });
+    const { status, body } = await getJson(
+      app,
+      '/api/geocode/reverse?lat=1&lng=2'
+    );
+    assert.equal(status, 503);
+    assert.match(body.error, /GEOCODING_API_KEY/);
+  });
+
+  it('proxies reverse geocode success and failure', async () => {
+    const okApp = createApp({
+      mapsKey: '',
+      geocodingKey: 'geo',
+      config: stubConfig,
+      reverseGeocodeFn: async () => ({
+        ok: true,
+        formattedAddress: 'Somewhere',
+        addressComponents: [],
+        types: ['locality'],
+        results: [{ types: ['locality'] }],
+      }),
+    });
+    const ok = await getJson(okApp, '/api/geocode/reverse?lat=37&lng=-121');
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.formattedAddress, 'Somewhere');
+
+    const failApp = createApp({
+      mapsKey: '',
+      geocodingKey: 'geo',
+      config: stubConfig,
+      reverseGeocodeFn: async () => ({
+        ok: false,
+        status: 404,
+        error: 'No address found for that location.',
+        googleStatus: 'ZERO_RESULTS',
+      }),
+    });
+    const fail = await getJson(
+      failApp,
+      '/api/geocode/reverse?lat=1&lng=2'
+    );
+    assert.equal(fail.status, 404);
+    assert.match(fail.body.error, /No address found/);
+  });
 });

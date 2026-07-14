@@ -71,7 +71,7 @@ public/
     constants.js          Miles/meters constants
     dom.js                Small DOM helpers
     ui.js                 Field/map/status helpers
-test/                     node:test (dots, geo, selection-logic, schema, review-logic, config, geocode, api, admin)
+test/                     node:test (dots, geo, selection-logic, schema, review-logic, config, geocode, api, admin, ui, dom, markers, …)
 render.yaml               Render Blueprint
 target-selection-app-PRD.md
 ```

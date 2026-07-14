@@ -329,6 +329,11 @@ describe('Admin API', () => {
       body: { username: 'admin', password: 'pass' },
     });
     const cookie = cookieHeaderFromSetCookie(login.setCookie);
+    const session = await requestJson(app, '/api/admin/session', {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(session.body.authenticated, true);
+
     const logout = await requestJson(app, '/api/admin/logout', {
       method: 'POST',
       headers: { Cookie: cookie },
@@ -338,5 +343,31 @@ describe('Admin API', () => {
     assert.ok(
       logout.setCookie.some((c) => /mq9_admin=.*Max-Age=0/i.test(c))
     );
+  });
+
+  it('reports session state when admin is configured or not', async () => {
+    const off = createApp({
+      mapsKey: '',
+      geocodingKey: '',
+      config: stubConfig,
+      adminUsername: '',
+      adminPassword: '',
+    });
+    const offSession = await requestJson(off, '/api/admin/session');
+    assert.deepEqual(offSession.body, {
+      adminConfigured: false,
+      authenticated: false,
+    });
+
+    const on = createApp({
+      mapsKey: '',
+      geocodingKey: '',
+      config: stubConfig,
+      adminUsername: 'admin',
+      adminPassword: 'pass',
+    });
+    const anon = await requestJson(on, '/api/admin/session');
+    assert.equal(anon.body.adminConfigured, true);
+    assert.equal(anon.body.authenticated, false);
   });
 });

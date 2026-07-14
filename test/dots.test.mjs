@@ -18,6 +18,16 @@ function mulberry32(seed) {
   };
 }
 
+describe('distanceMeters', () => {
+  it('is ~0 for identical points and scales with separation', () => {
+    const a = { lat: 37.8, lng: -121.7 };
+    assert.ok(distanceMeters(a, a) < 1e-6);
+    const near = { lat: 37.801, lng: -121.7 };
+    const far = { lat: 37.81, lng: -121.7 };
+    assert.ok(distanceMeters(a, far) > distanceMeters(a, near));
+  });
+});
+
 describe('samplePointInDisk', () => {
   it('keeps samples inside the radius (approx meters)', () => {
     const center = { lat: 37.8, lng: -121.7 };

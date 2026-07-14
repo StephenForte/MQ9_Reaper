@@ -1,6 +1,34 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, it } from 'node:test';
-import { parseFrontmatter, toAppConfig, loadAppConfig } from '../config.js';
+import {
+  defaultsForClient,
+  extractMarkdownBody,
+  getAppConfig,
+  loadAppConfig,
+  parseFrontmatter,
+  reloadAppConfig,
+  serializeFrontmatter,
+  setAppConfig,
+  toAppConfig,
+} from '../config.js';
+
+const base = {
+  radiusMiles: '3',
+  dotCount: '25',
+  minSelections: '1',
+  maxSelections: '12',
+  blockExtraSelections: 'true',
+  minDotSpacingMeters: '50',
+  mapType: 'hybrid',
+  radiusUnit: 'miles',
+  confirmOnRecenter: 'true',
+  seededRng: 'false',
+  defaultCenterLat: '37.7996',
+  defaultCenterLng: '-121.7124',
+};
 
 describe('parseFrontmatter', () => {
   it('reads flat key/value pairs', () => {
@@ -25,21 +53,6 @@ describe('parseFrontmatter', () => {
 });
 
 describe('toAppConfig', () => {
-  const base = {
-    radiusMiles: '3',
-    dotCount: '25',
-    minSelections: '1',
-    maxSelections: '12',
-    blockExtraSelections: 'true',
-    minDotSpacingMeters: '50',
-    mapType: 'hybrid',
-    radiusUnit: 'miles',
-    confirmOnRecenter: 'true',
-    seededRng: 'false',
-    defaultCenterLat: '37.7996',
-    defaultCenterLng: '-121.7124',
-  };
-
   it('parses min/max selection defaults and blockExtraSelections', () => {
     const cfg = toAppConfig(base);
     assert.equal(cfg.dotCount, 25);
@@ -114,14 +127,87 @@ describe('toAppConfig', () => {
     assert.equal(cfg.minSelections, 1);
     assert.equal(cfg.maxSelections, 10);
   });
+
+  it('parses seededRng true and confirmOnRecenter false', () => {
+    const cfg = toAppConfig({
+      ...base,
+      seededRng: 'true',
+      confirmOnRecenter: 'false',
+      mapType: 'satellite',
+    });
+    assert.equal(cfg.seededRng, true);
+    assert.equal(cfg.confirmOnRecenter, false);
+    assert.equal(cfg.mapType, 'satellite');
+  });
+
+  it('rejects non-boolean confirmOnRecenter / blockExtraSelections / seededRng', () => {
+    assert.throws(
+      () => toAppConfig({ ...base, confirmOnRecenter: 'yes' }),
+      /confirmOnRecenter/
+    );
+    assert.throws(
+      () => toAppConfig({ ...base, blockExtraSelections: 'yes' }),
+      /blockExtraSelections/
+    );
+    assert.throws(() => toAppConfig({ ...base, seededRng: 'yes' }), /seededRng/);
+  });
+
+  it('rejects non-positive radius and negative spacing', () => {
+    assert.throws(
+      () => toAppConfig({ ...base, radiusMiles: '0' }),
+      /radiusMiles/
+    );
+    assert.throws(
+      () => toAppConfig({ ...base, minDotSpacingMeters: '-1' }),
+      /minDotSpacingMeters/
+    );
+  });
+
+  it('rejects non-integer counts', () => {
+    assert.throws(
+      () => toAppConfig({ ...base, dotCount: '25.5' }),
+      /dotCount/
+    );
+  });
 });
 
-describe('loadAppConfig', () => {
+describe('defaultsForClient / extractMarkdownBody', () => {
+  it('nests defaultCenter as center for the browser', () => {
+    const cfg = toAppConfig(base);
+    const defaults = defaultsForClient(cfg);
+    assert.deepEqual(defaults.center, cfg.defaultCenter);
+    assert.equal(defaults.radiusMiles, cfg.radiusMiles);
+  });
+
+  it('extracts the markdown body after frontmatter', () => {
+    const text = '---\nradiusMiles: 3\n---\n\n# Title\n\nBody.\n';
+    assert.equal(extractMarkdownBody(text), '\n# Title\n\nBody.\n');
+    assert.equal(extractMarkdownBody('# no fm\n'), '');
+  });
+});
+
+describe('loadAppConfig / getAppConfig / setAppConfig / reloadAppConfig', () => {
   it('loads the repo app-config.md', () => {
     const cfg = loadAppConfig();
     assert.ok(cfg.maxSelections < cfg.dotCount);
     assert.ok(cfg.minSelections <= cfg.maxSelections);
     assert.equal(cfg.radiusUnit, 'miles');
     assert.equal(cfg.blockExtraSelections, true);
+  });
+
+  it('setAppConfig updates getAppConfig and reload restores from disk', () => {
+    const original = getAppConfig();
+    const patched = { ...original, radiusMiles: original.radiusMiles + 1 };
+    setAppConfig(patched);
+    assert.equal(getAppConfig().radiusMiles, patched.radiusMiles);
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mq9-reload-'));
+    const filePath = path.join(dir, 'app-config.md');
+    fs.writeFileSync(filePath, serializeFrontmatter(original), 'utf8');
+    const reloaded = reloadAppConfig(filePath);
+    assert.equal(reloaded.radiusMiles, original.radiusMiles);
+    assert.equal(getAppConfig().radiusMiles, original.radiusMiles);
+
+    setAppConfig(original);
   });
 });

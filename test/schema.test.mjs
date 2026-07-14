@@ -99,6 +99,22 @@ describe('place-names', () => {
       }),
       null
     );
+    assert.equal(specificPlaceName(null), null);
+    assert.equal(
+      specificPlaceName({
+        types: ['premise'],
+        address_components: [
+          { long_name: 'Tower A', types: ['premise'] },
+        ],
+      }),
+      'Tower A'
+    );
+  });
+
+  it('falls back to formatted address first segment for region labels', () => {
+    assert.equal(regionLabelFromGeocode([], 'Oakley, CA, USA'), 'Oakley');
+    assert.equal(regionLabelFromGeocode([], ''), 'Region');
+    assert.equal(defaultTargetName('  ', 1), 'Region Target 1');
   });
 });
 

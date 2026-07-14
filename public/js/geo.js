@@ -14,17 +14,28 @@ export function radiusOffsetDegrees(center, radiusMeters) {
 }
 
 /**
+ * SW / NE corners for a radius box (pure; used by Maps `fitBounds`).
+ * @param {{ lat: number, lng: number }} center
+ * @param {number} radiusMeters
+ * @returns {{ sw: { lat: number, lng: number }, ne: { lat: number, lng: number } }}
+ */
+export function boundsCornersForRadius(center, radiusMeters) {
+  const { dLat, dLng } = radiusOffsetDegrees(center, radiusMeters);
+  return {
+    sw: { lat: center.lat - dLat, lng: center.lng - dLng },
+    ne: { lat: center.lat + dLat, lng: center.lng + dLng },
+  };
+}
+
+/**
  * Bounds box from center ± radius (PRD §5.2 / §5.3).
  * @param {{ lat: number, lng: number }} center
  * @param {number} radiusMeters
  * @returns {google.maps.LatLngBounds}
  */
 export function boundsForRadius(center, radiusMeters) {
-  const { dLat, dLng } = radiusOffsetDegrees(center, radiusMeters);
-  return new google.maps.LatLngBounds(
-    { lat: center.lat - dLat, lng: center.lng - dLng },
-    { lat: center.lat + dLat, lng: center.lng + dLng }
-  );
+  const { sw, ne } = boundsCornersForRadius(center, radiusMeters);
+  return new google.maps.LatLngBounds(sw, ne);
 }
 
 /**

@@ -48,6 +48,21 @@ const UNSELECTED_URL = circleSvgDataUrl(UNSELECTED);
 const SELECTED_URL = circleSvgDataUrl(SELECTED);
 const SAVED_URL = diamondSvgDataUrl(SAVED);
 
+/** @returns {string} */
+export function unselectedDotIconUrl() {
+  return UNSELECTED_URL;
+}
+
+/** @returns {string} */
+export function selectedDotIconUrl() {
+  return SELECTED_URL;
+}
+
+/** @returns {string} */
+export function savedTargetIconUrl() {
+  return SAVED_URL;
+}
+
 /**
  * @param {boolean} selected
  * @returns {google.maps.Icon}
