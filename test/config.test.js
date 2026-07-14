@@ -1,6 +1,6 @@
-const assert = require('node:assert/strict');
-const { describe, it } = require('node:test');
-const { parseFrontmatter, toAppConfig, loadAppConfig } = require('../config');
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { parseFrontmatter, toAppConfig, loadAppConfig } from '../config.js';
 
 describe('parseFrontmatter', () => {
   it('reads flat key/value pairs', () => {

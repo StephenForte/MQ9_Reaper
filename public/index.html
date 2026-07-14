@@ -165,6 +165,38 @@
               <p id="candidates-error" class="field-error" role="alert" hidden></p>
             </section>
 
+            <section
+              id="section-targeting"
+              class="side-section"
+              aria-labelledby="targeting-heading"
+              hidden
+            >
+              <h3 id="targeting-heading" class="side-section-title">
+                Targeting list
+              </h3>
+              <p class="hint">
+                Name each target, set confidence (1–5) and priority, then
+                download JSON.
+              </p>
+              <p
+                id="targeting-stale"
+                class="field-error"
+                role="status"
+                hidden
+              ></p>
+              <div id="targeting-list" class="targeting-list"></div>
+              <button
+                type="button"
+                class="btn btn-primary btn-block"
+                id="btn-download-json"
+                disabled
+              >
+                Download JSON
+              </button>
+              <p id="targeting-error" class="field-error" role="alert" hidden></p>
+              <p id="targeting-success" class="hint hint-success hint-tight" hidden></p>
+            </section>
+
             <dl class="meta-list">
               <div>
                 <dt>Center</dt>

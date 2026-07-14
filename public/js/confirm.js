@@ -49,6 +49,7 @@ export function confirmAction(message, opts = {}) {
 
     const finish = (value) => {
       root.remove();
+      document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', onKey);
       resolve(value);
     };
@@ -56,6 +57,9 @@ export function confirmAction(message, opts = {}) {
     const onKey = (event) => {
       if (event.key === 'Escape') finish(false);
     };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
 
     cancelBtn.addEventListener('click', () => finish(false));
     okBtn.addEventListener('click', () => finish(true));

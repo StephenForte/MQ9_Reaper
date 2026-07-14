@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   canSelectDot,
+  getSelectedDots,
   isExactSelection,
   labelForCenterSource,
   selectedCount,
+  selectedIds,
   toggleDotSelection,
   willLoseSelection,
 } from '../public/js/selection-logic.js';
@@ -25,6 +27,21 @@ describe('selectedCount / isExactSelection', () => {
     assert.equal(selectedCount(dots), 2);
     assert.equal(isExactSelection(dots, 2), true);
     assert.equal(isExactSelection(dots, 3), false);
+  });
+});
+
+describe('getSelectedDots / selectedIds', () => {
+  it('returns selected dots and ids in array order', () => {
+    const dots = dotsFrom([
+      { id: 'd-01', selected: false },
+      { id: 'd-02', selected: true },
+      { id: 'd-03', selected: true },
+    ]);
+    assert.deepEqual(
+      getSelectedDots(dots).map((d) => d.id),
+      ['d-02', 'd-03']
+    );
+    assert.deepEqual(selectedIds(dots), ['d-02', 'd-03']);
   });
 });
 

@@ -38,7 +38,7 @@ Exit criteria are in the PRD §9. Demo each phase before expanding scope.
 ## Repo layout
 
 ```
-server.js                 Express entry: static + API routes
+server.js                 Express entry: static + API routes (ESM)
 config.js                 Loads config/app-config.md → appConfig
 config/app-config.md      Human-editable runtime defaults
 lib/geocode.js            Geocoding proxy helper (server)
@@ -47,17 +47,21 @@ public/
   css/app.css             App styles
   js/
     app.js                Boot / map lifecycle
-    selection.js          Selection-tab center, circle, forms, candidates
+    selection.js          Selection-tab center, circle, forms, candidates, export wiring
     selection-logic.js    Pure selection helpers (testable)
     dots.js               Candidate dot generation (uniform disk)
     dot-markers.js        Selected / unselected marker icons
+    targeting.js          Targeting-list UI (P3)
+    schema.js             §4 JSON build + validate (P3/P4)
+    download.js           Client JSON download helper
     confirm.js            Operator confirm dialog
     tabs.js               Tab UI
     geo.js                Bounds + lat/lng helpers
     maps-loader.js        Google Maps script loader
     constants.js          Miles/meters constants
+    dom.js                Small DOM helpers
     ui.js                 Field/map error helpers
-test/                     node:test coverage (dots, geo, selection-logic, config)
+test/                     node:test coverage (dots, geo, selection-logic, schema, config)
 render.yaml               Render Blueprint
 target-selection-app-PRD.md
 ```
@@ -71,7 +75,8 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 - **Comments:** Only explain non-obvious PRD/behavior ties (e.g. §5.3 disk sampling). No narrating obvious code.
 - **Errors:** Inline field errors for forms; blocking overlay for map-load failures. Prefer clear operator language from PRD §8.3.
 - **XSS:** Build error UI with `textContent` / `replaceChildren`, not string `innerHTML` for dynamic text.
-- **Validation:** Lat ∈ [−90, 90], lng ∈ [−180, 180]; radius `> 0`. Schema validation for JSON arrives in P3/P4 — centralize it then.
+- **Validation:** Lat ∈ [−90, 90], lng ∈ [−180, 180]; radius `> 0`. JSON schema build/validate lives in `public/js/schema.js` (P3 export; P4 upload reuses it).
+- **Modules:** Package is ESM (`"type": "module"`). Prefer small ES modules under `public/js/` over one growing `app.js`. Keep server routes thin; put Google/HTTP details in `lib/`.
 - **No drive-by refactors** outside the active phase. When touching structure for maintainability, keep behavior stable and phase-scoped.
 - **Do not** invent auth, analytics, routing tools, or server file libraries.
 

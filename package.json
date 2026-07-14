@@ -2,6 +2,7 @@
   "name": "mq9-reaper",
   "version": "0.1.0",
   "description": "Map target selection app — pin, shortlist, annotate, and review geographic points",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

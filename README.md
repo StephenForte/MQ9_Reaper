@@ -2,15 +2,14 @@
 
 Two-tab web app for selecting and reviewing geographic points on a Google Maps satellite view. Full product scope: `target-selection-app-PRD.md`. Agent/contributor contract: `AGENTS.md`.
 
-## Current phase: P2 — Dot generation + selection
+## Current phase: P3 — Metadata + export
 
-- **Load dots** places `dotCount` candidates (uniform disk + `minDotSpacingMeters`)
-- Click dots to toggle selection; live `selected / N` counter
-- Exact-N gating via `requiredSelections` + `blockExtraSelections`
-- **Save Targets** enables only at exact N (annotation/export is P3)
-- Confirm before center/radius/reload when ≥1 dot is selected
+- **Save Targets** opens the targeting list for the exact-N shortlist
+- Annotate each row: name, confidence (1–5), priority (low/medium/high/critical)
+- **Download JSON** exports a §4 schema file (`seed: null`) via client download
+- Changing the shortlist after Save Targets marks the list stale until you Save again
 
-P1 location inputs (address, map click, lat/long, radius + Apply) remain the base.
+P2 selection (Load dots, exact-N gate, confirm-on-recenter) and P1 location inputs remain the base. Review upload is P4.
 
 ## Local setup
 
@@ -43,7 +42,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Without `GEOCODING_API_KEY`, map click and lat/long still work; address geocode returns 503.
 
-P2 exit check: set a center → **Load dots** → select exactly `requiredSelections` (default 12) → **Save Targets** enables.
+P3 exit check: center → **Load dots** → select exactly N → **Save Targets** → annotate all rows → **Download JSON** → open the file and confirm §4 shape.
 
 ## Deploy on Render
 
@@ -53,7 +52,7 @@ P2 exit check: set a center → **Load dots** → select exactly `requiredSelect
    - `GOOGLE_MAPS_API_KEY` — referrer-restrict to your Render domain + Maps JavaScript API
    - `GEOCODING_API_KEY` — Geocoding API only; IP-restrict to Render egress when practical
    - `ADMIN_USERNAME` / `ADMIN_PASSWORD` — optional until P6 Admin; set now if you want them ready on Render
-4. Deploy. P2 exit check: load dots inside the radius, select exactly N, Save Targets enables.
+4. Deploy. P3 exit check: export a complete targets JSON from the Selection tab.
 
 ## API
 
@@ -66,15 +65,15 @@ P2 exit check: set a center → **Load dots** → select exactly `requiredSelect
 ## Project layout
 
 ```
-server.js              Express: static + health/config/geocode
+server.js              Express: static + health/config/geocode (ESM)
 config.js              Loads config/app-config.md
 config/app-config.md   Editable defaults (radius, counts, mapType, …)
 lib/geocode.js         Geocode proxy helper
 public/
-  index.html           Two-tab shell + location + candidates UI
+  index.html           Two-tab shell + location + candidates + targeting UI
   css/app.css
-  js/                  ES modules (app, selection, dots, …)
-test/                  node:test (dots, geo, selection-logic, config)
+  js/                  ES modules (app, selection, schema, targeting, …)
+test/                  node:test (dots, geo, selection-logic, schema, config)
 render.yaml            Render Blueprint
 AGENTS.md              Coding / phase standards
 ```

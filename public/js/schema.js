@@ -1,0 +1,393 @@
+/**
+ * Saved-target JSON schema (§4) — build + validate.
+ * Shared by P3 export and (later) P4 upload.
+ */
+
+/** @typedef {{ lat: number, lng: number }} LatLng */
+/** @typedef {'address' | 'click' | 'latlng'} ExportCenterSource */
+/** @typedef {'address' | 'click' | 'latlng' | 'default'} CenterSource */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   name: string,
+ *   lat: number,
+ *   lng: number,
+ *   confidence: number | null,
+ *   priority: string,
+ *   candidateId?: string,
+ * }} TargetingRow
+ */
+
+/**
+ * @typedef {{
+ *   version: string,
+ *   createdAt: string,
+ *   center: { lat: number, lng: number, source: ExportCenterSource },
+ *   radiusMiles: number,
+ *   generation: {
+ *     dotCount: number,
+ *     requiredSelections: number,
+ *     seed: number | null,
+ *   },
+ *   targets: Array<{
+ *     id: string,
+ *     name: string,
+ *     lat: number,
+ *     lng: number,
+ *     confidence: number,
+ *     priority: string,
+ *   }>,
+ * }} TargetFile
+ */
+
+export const SCHEMA_VERSION = '1.0';
+
+export const PRIORITIES = /** @type {const} */ ([
+  'low',
+  'medium',
+  'high',
+  'critical',
+]);
+
+/**
+ * Schema enum excludes internal "default" — map it for export.
+ * @param {CenterSource} source
+ * @returns {ExportCenterSource}
+ */
+export function exportCenterSource(source) {
+  if (source === 'address' || source === 'click' || source === 'latlng') {
+    return source;
+  }
+  return 'latlng';
+}
+
+/**
+ * Stable target ids `t-01` … matching PRD §4.2 style.
+ * @param {number} index zero-based
+ * @returns {string}
+ */
+export function targetIdAt(index) {
+  return `t-${String(index + 1).padStart(2, '0')}`;
+}
+
+/**
+ * Snapshot selected candidates into editable targeting rows.
+ * @param {Array<{ id: string, lat: number, lng: number, selected: boolean }>} dots
+ * @returns {TargetingRow[]}
+ */
+export function rowsFromSelectedDots(dots) {
+  return dots
+    .filter((dot) => dot.selected)
+    .map((dot, index) => ({
+      id: targetIdAt(index),
+      name: '',
+      lat: dot.lat,
+      lng: dot.lng,
+      confidence: null,
+      priority: '',
+      candidateId: dot.id,
+    }));
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is number}
+ */
+function isIntInRange(value, min, max) {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= min &&
+    value <= max
+  );
+}
+
+/**
+ * @param {TargetingRow} row
+ * @returns {{ ok: true } | { ok: false, field: string, message: string }}
+ */
+export function validateTargetingRow(row) {
+  const name = typeof row.name === 'string' ? row.name.trim() : '';
+  if (!name) {
+    return { ok: false, field: 'name', message: 'Name is required.' };
+  }
+  if (!isIntInRange(row.confidence, 1, 5)) {
+    return {
+      ok: false,
+      field: 'confidence',
+      message: 'Confidence must be 1–5.',
+    };
+  }
+  if (!PRIORITIES.includes(/** @type {*} */ (row.priority))) {
+    return {
+      ok: false,
+      field: 'priority',
+      message: 'Select a priority.',
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * @param {TargetingRow[]} rows
+ * @param {number} required
+ * @returns {{
+ *   ok: true,
+ *   rows: TargetingRow[],
+ * } | {
+ *   ok: false,
+ *   message: string,
+ *   rowIndex?: number,
+ *   field?: string,
+ * }}
+ */
+export function validateTargetingRows(rows, required) {
+  if (!Array.isArray(rows) || rows.length !== required) {
+    return {
+      ok: false,
+      message: `Expected ${required} targets, found ${Array.isArray(rows) ? rows.length : 0}.`,
+    };
+  }
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const result = validateTargetingRow(rows[i]);
+    if (!result.ok) {
+      return {
+        ok: false,
+        message: `Target ${rows[i].id}: ${result.message}`,
+        rowIndex: i,
+        field: result.field,
+      };
+    }
+  }
+
+  return { ok: true, rows };
+}
+
+/**
+ * @param {{
+ *   center: LatLng,
+ *   source: CenterSource,
+ *   radiusMiles: number,
+ *   dotCount: number,
+ *   requiredSelections: number,
+ *   seed?: number | null,
+ *   rows: TargetingRow[],
+ *   createdAt?: string,
+ * }} input
+ * @returns {{ ok: true, document: TargetFile } | { ok: false, message: string, rowIndex?: number, field?: string }}
+ */
+export function buildTargetFile(input) {
+  const required = input.requiredSelections;
+  const validated = validateTargetingRows(input.rows, required);
+  if (!validated.ok) {
+    return validated;
+  }
+
+  if (!(input.radiusMiles > 0) || !Number.isFinite(input.radiusMiles)) {
+    return { ok: false, message: 'Radius must be greater than 0.' };
+  }
+
+  const createdAt = input.createdAt || new Date().toISOString();
+  /** @type {TargetFile} */
+  const document = {
+    version: SCHEMA_VERSION,
+    createdAt,
+    center: {
+      lat: input.center.lat,
+      lng: input.center.lng,
+      source: exportCenterSource(input.source),
+    },
+    radiusMiles: input.radiusMiles,
+    generation: {
+      dotCount: input.dotCount,
+      requiredSelections: required,
+      seed: input.seed === undefined ? null : input.seed,
+    },
+    targets: validated.rows.map((row) => ({
+      id: row.id,
+      name: row.name.trim(),
+      lat: row.lat,
+      lng: row.lng,
+      confidence: /** @type {number} */ (row.confidence),
+      priority: row.priority,
+    })),
+  };
+
+  const check = validateTargetFile(document);
+  if (!check.ok) {
+    return { ok: false, message: check.message };
+  }
+
+  return { ok: true, document };
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+function latLngError(lat, lng) {
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    return 'lat/lng must be numbers.';
+  }
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return 'lat/lng must be finite numbers.';
+  }
+  if (lat < -90 || lat > 90) return 'lat must be between −90 and 90.';
+  if (lng < -180 || lng > 180) return 'lng must be between −180 and 180.';
+  return null;
+}
+
+/**
+ * Validate a parsed JSON document against §4 (P3 build + P4 upload).
+ * Unknown keys are ignored; missing/invalid required fields fail.
+ *
+ * @param {unknown} raw
+ * @returns {{ ok: true, document: TargetFile } | { ok: false, message: string }}
+ */
+export function validateTargetFile(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, message: 'File must be a JSON object.' };
+  }
+
+  const doc = /** @type {Record<string, unknown>} */ (raw);
+
+  if (doc.version !== SCHEMA_VERSION) {
+    return {
+      ok: false,
+      message: `Unsupported version (expected "${SCHEMA_VERSION}").`,
+    };
+  }
+
+  if (typeof doc.createdAt !== 'string' || !doc.createdAt.trim()) {
+    return { ok: false, message: 'createdAt must be a non-empty string.' };
+  }
+
+  const center = doc.center;
+  if (!center || typeof center !== 'object' || Array.isArray(center)) {
+    return { ok: false, message: 'center is required.' };
+  }
+  const c = /** @type {Record<string, unknown>} */ (center);
+  const centerErr = latLngError(c.lat, c.lng);
+  if (centerErr) {
+    return { ok: false, message: `center: ${centerErr}` };
+  }
+  if (c.source !== 'address' && c.source !== 'click' && c.source !== 'latlng') {
+    return {
+      ok: false,
+      message: 'center.source must be "address", "click", or "latlng".',
+    };
+  }
+
+  if (typeof doc.radiusMiles !== 'number' || !(doc.radiusMiles > 0)) {
+    return { ok: false, message: 'radiusMiles must be a number > 0.' };
+  }
+
+  const generation = doc.generation;
+  if (!generation || typeof generation !== 'object' || Array.isArray(generation)) {
+    return { ok: false, message: 'generation is required.' };
+  }
+  const g = /** @type {Record<string, unknown>} */ (generation);
+  if (!Number.isInteger(g.dotCount) || /** @type {number} */ (g.dotCount) < 1) {
+    return { ok: false, message: 'generation.dotCount must be an integer ≥ 1.' };
+  }
+  if (
+    !Number.isInteger(g.requiredSelections) ||
+    /** @type {number} */ (g.requiredSelections) < 1
+  ) {
+    return {
+      ok: false,
+      message: 'generation.requiredSelections must be an integer ≥ 1.',
+    };
+  }
+  if (g.seed !== null && typeof g.seed !== 'number') {
+    return { ok: false, message: 'generation.seed must be a number or null.' };
+  }
+
+  const required = /** @type {number} */ (g.requiredSelections);
+  if (!Array.isArray(doc.targets)) {
+    return { ok: false, message: 'targets must be an array.' };
+  }
+  if (doc.targets.length !== required) {
+    return {
+      ok: false,
+      message: `expected ${required} targets, found ${doc.targets.length}`,
+    };
+  }
+
+  /** @type {TargetFile['targets']} */
+  const targets = [];
+  const seenIds = new Set();
+
+  for (let i = 0; i < doc.targets.length; i += 1) {
+    const item = doc.targets[i];
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return { ok: false, message: `targets[${i}] must be an object.` };
+    }
+    const t = /** @type {Record<string, unknown>} */ (item);
+
+    if (typeof t.id !== 'string' || !t.id.trim()) {
+      return { ok: false, message: `targets[${i}].id must be a non-empty string.` };
+    }
+    if (seenIds.has(t.id)) {
+      return { ok: false, message: `Duplicate target id "${t.id}".` };
+    }
+    seenIds.add(t.id);
+
+    if (typeof t.name !== 'string' || !t.name.trim()) {
+      return {
+        ok: false,
+        message: `targets[${i}].name must be a non-empty string.`,
+      };
+    }
+
+    const posErr = latLngError(t.lat, t.lng);
+    if (posErr) {
+      return { ok: false, message: `targets[${i}]: ${posErr}` };
+    }
+
+    if (!isIntInRange(t.confidence, 1, 5)) {
+      return {
+        ok: false,
+        message: `targets[${i}].confidence must be an integer 1–5.`,
+      };
+    }
+
+    if (!PRIORITIES.includes(/** @type {*} */ (t.priority))) {
+      return {
+        ok: false,
+        message: `targets[${i}].priority must be low|medium|high|critical.`,
+      };
+    }
+
+    targets.push({
+      id: t.id,
+      name: t.name.trim(),
+      lat: /** @type {number} */ (t.lat),
+      lng: /** @type {number} */ (t.lng),
+      confidence: /** @type {number} */ (t.confidence),
+      priority: /** @type {string} */ (t.priority),
+    });
+  }
+
+  return {
+    ok: true,
+    document: {
+      version: SCHEMA_VERSION,
+      createdAt: doc.createdAt,
+      center: {
+        lat: /** @type {number} */ (c.lat),
+        lng: /** @type {number} */ (c.lng),
+        source: /** @type {ExportCenterSource} */ (c.source),
+      },
+      radiusMiles: doc.radiusMiles,
+      generation: {
+        dotCount: /** @type {number} */ (g.dotCount),
+        requiredSelections: required,
+        seed: /** @type {number | null} */ (g.seed),
+      },
+      targets,
+    },
+  };
+}

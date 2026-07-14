@@ -16,6 +16,23 @@ export function selectedCount(dots) {
 
 /**
  * @param {CandidateDot[]} dots
+ * @returns {CandidateDot[]}
+ */
+export function getSelectedDots(dots) {
+  return dots.filter((dot) => dot.selected);
+}
+
+/**
+ * Ordered ids of currently selected dots (stable map order).
+ * @param {CandidateDot[]} dots
+ * @returns {string[]}
+ */
+export function selectedIds(dots) {
+  return getSelectedDots(dots).map((dot) => dot.id);
+}
+
+/**
+ * @param {CandidateDot[]} dots
  * @param {number} required
  * @returns {boolean}
  */

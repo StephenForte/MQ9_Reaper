@@ -1,9 +1,11 @@
-require('dotenv').config();
-const path = require('path');
-const express = require('express');
-const { appConfig } = require('./config');
-const { geocodeAddress } = require('./lib/geocode');
+import 'dotenv/config';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import express from 'express';
+import { appConfig } from './config.js';
+import { geocodeAddress } from './lib/geocode.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -78,9 +80,13 @@ app.get('/api/geocode', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`MQ9 Reaper listening on http://localhost:${PORT}`);
   if (!process.env.GOOGLE_MAPS_API_KEY) {
-    console.warn('Warning: GOOGLE_MAPS_API_KEY is not set — map will show an error state.');
+    console.warn(
+      'Warning: GOOGLE_MAPS_API_KEY is not set — map will show an error state.'
+    );
   }
   if (!process.env.GEOCODING_API_KEY) {
-    console.warn('Warning: GEOCODING_API_KEY is not set — address geocoding will return 503.');
+    console.warn(
+      'Warning: GEOCODING_API_KEY is not set — address geocoding will return 503.'
+    );
   }
 });

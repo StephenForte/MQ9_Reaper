@@ -1,19 +1,21 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Loads human-editable defaults from config/app-config.md (YAML frontmatter).
  * Admin UI (PRD P6) will eventually write the same file / values.
  */
 
-const CONFIG_MD = path.join(__dirname, 'config', 'app-config.md');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+export const CONFIG_MD = path.join(__dirname, 'config', 'app-config.md');
 
 /**
  * Minimal frontmatter parser for flat `key: value` lines (no nested YAML).
  * @param {string} text
  * @returns {Record<string, string>}
  */
-function parseFrontmatter(text) {
+export function parseFrontmatter(text) {
   const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) {
     throw new Error(`Missing YAML frontmatter in ${CONFIG_MD}`);
@@ -36,7 +38,7 @@ function parseFrontmatter(text) {
 /**
  * @param {Record<string, string>} raw
  */
-function toAppConfig(raw) {
+export function toAppConfig(raw) {
   const radiusMiles = Number(raw.radiusMiles);
   const dotCount = Number(raw.dotCount);
   const requiredSelections = Number(raw.requiredSelections);
@@ -89,17 +91,9 @@ function toAppConfig(raw) {
   };
 }
 
-function loadAppConfig() {
+export function loadAppConfig() {
   const text = fs.readFileSync(CONFIG_MD, 'utf8');
   return toAppConfig(parseFrontmatter(text));
 }
 
-const appConfig = loadAppConfig();
-
-module.exports = {
-  appConfig,
-  loadAppConfig,
-  CONFIG_MD,
-  parseFrontmatter,
-  toAppConfig,
-};
+export const appConfig = loadAppConfig();

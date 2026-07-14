@@ -1,8 +1,11 @@
 import { METERS_PER_MILE } from './constants.js';
 import { confirmAction } from './confirm.js';
+import { byId, byIdAs } from './dom.js';
+import { downloadJson, buildTargetsFilename } from './download.js';
 import { generateCandidateDots } from './dots.js';
 import { iconForDot } from './dot-markers.js';
 import { boundsForRadius, parseCoordinate, validateLatLng } from './geo.js';
+import { buildTargetFile, rowsFromSelectedDots } from './schema.js';
 import {
   isExactSelection,
   labelForCenterSource,
@@ -10,6 +13,7 @@ import {
   toggleDotSelection,
   willLoseSelection,
 } from './selection-logic.js';
+import { createTargetingController } from './targeting.js';
 import { setFieldError } from './ui.js';
 
 /**
@@ -34,7 +38,7 @@ import { setFieldError } from './ui.js';
  */
 
 /**
- * Selection-tab map: center pin, radius circle, location forms, candidate dots (P2).
+ * Selection-tab map: center pin, radius circle, location forms, candidates, export (P3).
  */
 export function createSelectionController() {
   /** @type {google.maps.Map | null} */
@@ -55,16 +59,17 @@ export function createSelectionController() {
   let candidates = [];
   /** @type {Map<string, google.maps.Marker>} */
   const markersById = new Map();
+  const targeting = createTargetingController();
 
   function willLoseWork() {
     return willLoseSelection(candidates);
   }
 
   function updateMeta() {
-    const centerEl = document.getElementById('select-center-label');
-    const sourceEl = document.getElementById('select-source-label');
-    const radiusEl = document.getElementById('select-radius-label');
-    const typeEl = document.getElementById('select-map-type');
+    const centerEl = byId('select-center-label');
+    const sourceEl = byId('select-source-label');
+    const radiusEl = byId('select-radius-label');
+    const typeEl = byId('select-map-type');
 
     if (centerEl && currentCenter) {
       centerEl.textContent = `${currentCenter.lat.toFixed(4)}, ${currentCenter.lng.toFixed(4)}`;
@@ -76,12 +81,8 @@ export function createSelectionController() {
     }
     if (typeEl && config) typeEl.textContent = config.defaults.mapType;
 
-    const latInput = /** @type {HTMLInputElement | null} */ (
-      document.getElementById('input-lat')
-    );
-    const lngInput = /** @type {HTMLInputElement | null} */ (
-      document.getElementById('input-lng')
-    );
+    const latInput = byIdAs('input-lat');
+    const lngInput = byIdAs('input-lng');
     if (latInput && currentCenter && document.activeElement !== latInput) {
       latInput.value = String(currentCenter.lat);
     }
@@ -95,7 +96,7 @@ export function createSelectionController() {
     const count = selectedCount(candidates);
     const exact = isExactSelection(candidates, required);
 
-    const counterEl = document.getElementById('selection-counter');
+    const counterEl = byId('selection-counter');
     if (counterEl) {
       counterEl.textContent = `${count} / ${required}`;
       counterEl.classList.toggle('is-exact', exact);
@@ -103,28 +104,28 @@ export function createSelectionController() {
       counterEl.classList.toggle('is-under', count > 0 && count < required);
     }
 
-    const statusEl = document.getElementById('candidates-status');
+    const statusEl = byId('candidates-status');
     if (statusEl) {
       if (candidates.length === 0) {
         statusEl.textContent = 'No candidates loaded.';
+      } else if (exact) {
+        statusEl.textContent = `${candidates.length} candidates — shortlist ready. Click Save Targets.`;
       } else {
-        statusEl.textContent = `${candidates.length} candidates on map.`;
+        statusEl.textContent = `${candidates.length} candidates on map. Select ${required}.`;
       }
     }
 
-    const saveBtn = /** @type {HTMLButtonElement | null} */ (
-      document.getElementById('btn-save-targets')
-    );
+    const saveBtn = byIdAs('btn-save-targets');
     if (saveBtn) saveBtn.disabled = !exact;
 
-    const loadBtn = /** @type {HTMLButtonElement | null} */ (
-      document.getElementById('btn-load-dots')
-    );
+    const loadBtn = byIdAs('btn-load-dots');
     if (loadBtn) {
       loadBtn.disabled = !currentCenter || !config;
       loadBtn.textContent =
         candidates.length > 0 ? 'Reload dots' : 'Load dots';
     }
+
+    targeting.syncWithSelection(candidates, required);
   }
 
   function clearCandidateMarkers() {
@@ -133,6 +134,7 @@ export function createSelectionController() {
     }
     markersById.clear();
     candidates = [];
+    targeting.clear();
     updateSelectionUi();
   }
 
@@ -211,6 +213,19 @@ export function createSelectionController() {
   }
 
   /**
+   * Same lat/lng does not clear candidates (source label may still update).
+   * @param {LatLng} center
+   * @param {LatLng | null} previous
+   */
+  function sameCoordinates(center, previous) {
+    return Boolean(
+      previous &&
+        Math.abs(previous.lat - center.lat) < 1e-9 &&
+        Math.abs(previous.lng - center.lng) < 1e-9
+    );
+  }
+
+  /**
    * @param {LatLng} center
    * @param {CenterSource} source
    * @param {{ fit?: boolean, skipConfirm?: boolean, clearCandidates?: boolean }} [opts]
@@ -224,11 +239,7 @@ export function createSelectionController() {
       skipConfirm = false,
       clearCandidates = true,
     } = opts;
-    const samePoint =
-      currentCenter &&
-      Math.abs(currentCenter.lat - center.lat) < 1e-9 &&
-      Math.abs(currentCenter.lng - center.lng) < 1e-9 &&
-      currentSource === source;
+    const samePoint = sameCoordinates(center, currentCenter);
 
     if (!skipConfirm && !samePoint) {
       const ok = await confirmDestructiveChange(
@@ -277,10 +288,11 @@ export function createSelectionController() {
 
     if (clearCandidates && !samePoint) {
       clearCandidateMarkers();
+    } else {
+      updateMeta();
+      updateSelectionUi();
     }
 
-    updateMeta();
-    updateSelectionUi();
     return true;
   }
 
@@ -325,9 +337,7 @@ export function createSelectionController() {
     currentSource = 'default';
     currentRadiusMiles = runtimeConfig.defaults.radiusMiles;
 
-    const radiusInput = /** @type {HTMLInputElement | null} */ (
-      document.getElementById('input-radius')
-    );
+    const radiusInput = byIdAs('input-radius');
     if (radiusInput) radiusInput.value = String(currentRadiusMiles);
 
     updateMeta();
@@ -353,6 +363,7 @@ export function createSelectionController() {
     }
 
     setFieldError('candidates-error', '');
+    targeting.clear();
     candidates = generateCandidateDots({
       center: currentCenter,
       radiusMiles: currentRadiusMiles,
@@ -361,6 +372,11 @@ export function createSelectionController() {
     });
     placeCandidateMarkers();
     updateSelectionUi();
+
+    byId('candidates-heading')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+    });
     return true;
   }
 
@@ -368,9 +384,7 @@ export function createSelectionController() {
    * @returns {Promise<boolean>}
    */
   async function applyRadiusFromInput() {
-    const radiusInput = /** @type {HTMLInputElement | null} */ (
-      document.getElementById('input-radius')
-    );
+    const radiusInput = byIdAs('input-radius');
     if (!radiusInput) return false;
 
     setFieldError('radius-error', '');
@@ -378,6 +392,7 @@ export function createSelectionController() {
     if (!Number.isFinite(value) || value <= 0) {
       setFieldError('radius-error', 'Radius must be a number greater than 0.');
       radiusInput.value = String(currentRadiusMiles);
+      radiusInput.focus();
       return false;
     }
 
@@ -408,34 +423,68 @@ export function createSelectionController() {
     return true;
   }
 
+  function saveTargets() {
+    if (!config || !currentCenter) return;
+    const required = config.defaults.requiredSelections;
+    if (!isExactSelection(candidates, required)) {
+      setFieldError(
+        'candidates-error',
+        `Select exactly ${required} candidates before saving.`
+      );
+      return;
+    }
+
+    setFieldError('candidates-error', '');
+    targeting.openWithRows(rowsFromSelectedDots(candidates));
+  }
+
+  function downloadTargets() {
+    if (!config || !currentCenter) return;
+
+    const collected = targeting.collectValidated(
+      config.defaults.requiredSelections
+    );
+    if (!collected.ok) {
+      setFieldError('targeting-error', collected.message);
+      return;
+    }
+
+    const built = buildTargetFile({
+      center: currentCenter,
+      source: currentSource,
+      radiusMiles: currentRadiusMiles,
+      dotCount: config.defaults.dotCount,
+      requiredSelections: config.defaults.requiredSelections,
+      seed: null,
+      rows: collected.rows,
+    });
+
+    if (!built.ok) {
+      setFieldError('targeting-error', built.message);
+      return;
+    }
+
+    const filename = buildTargetsFilename();
+    downloadJson(filename, built.document);
+    setFieldError('targeting-error', '');
+    targeting.setSuccess(`Downloaded ${filename}`);
+  }
+
   function wireForms() {
-    const addressForm = /** @type {HTMLFormElement | null} */ (
-      document.getElementById('form-address')
-    );
-    const latlngForm = /** @type {HTMLFormElement | null} */ (
-      document.getElementById('form-latlng')
-    );
-    const radiusForm = /** @type {HTMLFormElement | null} */ (
-      document.getElementById('form-radius')
-    );
-    const geocodeBtn = /** @type {HTMLButtonElement | null} */ (
-      document.getElementById('btn-geocode')
-    );
-    const loadDotsBtn = /** @type {HTMLButtonElement | null} */ (
-      document.getElementById('btn-load-dots')
-    );
-    const saveBtn = /** @type {HTMLButtonElement | null} */ (
-      document.getElementById('btn-save-targets')
-    );
+    const addressForm = byIdAs('form-address');
+    const latlngForm = byIdAs('form-latlng');
+    const radiusForm = byIdAs('form-radius');
+    const geocodeBtn = byIdAs('btn-geocode');
+    const loadDotsBtn = byIdAs('btn-load-dots');
+    const saveBtn = byIdAs('btn-save-targets');
+    const downloadBtn = byIdAs('btn-download-json');
 
     addressForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       setFieldError('address-error', '');
       setFieldError('latlng-error', '');
 
-      const input = /** @type {HTMLInputElement | null} */ (
-        document.getElementById('input-address')
-      );
+      const input = byIdAs('input-address');
       const q = input?.value.trim() || '';
       if (!q) {
         setFieldError('address-error', 'Enter a street address.');
@@ -473,12 +522,8 @@ export function createSelectionController() {
       setFieldError('latlng-error', '');
       setFieldError('address-error', '');
 
-      const latInput = /** @type {HTMLInputElement | null} */ (
-        document.getElementById('input-lat')
-      );
-      const lngInput = /** @type {HTMLInputElement | null} */ (
-        document.getElementById('input-lng')
-      );
+      const latInput = byIdAs('input-lat');
+      const lngInput = byIdAs('input-lng');
 
       const lat = parseCoordinate(latInput?.value || '');
       const lng = parseCoordinate(lngInput?.value || '');
@@ -512,10 +557,12 @@ export function createSelectionController() {
 
     saveBtn?.addEventListener('click', () => {
       if (saveBtn.disabled) return;
-      setFieldError(
-        'candidates-error',
-        'Annotation and export arrive in Phase 3. Selection is ready.'
-      );
+      saveTargets();
+    });
+
+    downloadBtn?.addEventListener('click', () => {
+      if (downloadBtn.disabled) return;
+      downloadTargets();
     });
 
     updateSelectionUi();
