@@ -60,8 +60,8 @@
           <aside class="side-panel">
             <h2 class="side-title">Location</h2>
             <p class="side-copy">
-              Set the center, apply a radius, then load candidate dots and
-              shortlist exactly the required count.
+              Set the center, apply a radius, then load candidate targets and
+              shortlist between the configured min and max.
             </p>
 
             <section class="side-section" aria-labelledby="center-heading">
@@ -139,14 +139,16 @@
             </section>
 
             <section class="side-section" aria-labelledby="candidates-heading">
-              <h3 id="candidates-heading" class="side-section-title">Candidates</h3>
+              <h3 id="candidates-heading" class="side-section-title">
+                Target selection
+              </h3>
               <p class="hint">
-                Load dots inside the radius, then click dots on the map to
+                Load targets inside the radius, then click markers on the map to
                 select or deselect.
               </p>
               <div class="candidates-actions">
                 <button type="button" class="btn btn-primary" id="btn-load-dots">
-                  Load dots
+                  Load targets
                 </button>
                 <button
                   type="button"
@@ -161,7 +163,7 @@
                 <span class="field-label">Selected</span>
                 <span id="selection-counter" class="selection-counter">0 / 12</span>
               </div>
-              <p id="candidates-status" class="hint hint-tight">No candidates loaded.</p>
+              <p id="candidates-status" class="hint hint-tight">No targets loaded.</p>
               <p id="candidates-error" class="field-error" role="alert" hidden></p>
             </section>
 

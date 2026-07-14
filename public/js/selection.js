@@ -5,9 +5,13 @@ import { downloadJson, buildTargetsFilename } from './download.js';
 import { generateCandidateDots } from './dots.js';
 import { iconForDot } from './dot-markers.js';
 import { boundsForRadius, parseCoordinate, validateLatLng } from './geo.js';
+import {
+  regionLabelFromGeocode,
+  specificPlaceName,
+} from './place-names.js';
 import { buildTargetFile, rowsFromSelectedDots } from './schema.js';
 import {
-  isExactSelection,
+  isValidSelection,
   labelForCenterSource,
   selectedCount,
   toggleDotSelection,
@@ -24,8 +28,8 @@ import { setFieldError } from './ui.js';
  *   defaults: {
  *     radiusMiles: number,
  *     dotCount: number,
- *     requiredSelections: number,
- *     blockExtraSelections: boolean,
+ *     minSelections: number,
+ *     maxSelections: number,
  *     minDotSpacingMeters: number,
  *     mapType: string,
  *     radiusUnit: string,
@@ -38,7 +42,7 @@ import { setFieldError } from './ui.js';
  */
 
 /**
- * Selection-tab map: center pin, radius circle, location forms, candidates, export (P3).
+ * Selection-tab map: center, radius, target selection, annotate + export.
  */
 export function createSelectionController() {
   /** @type {google.maps.Map | null} */
@@ -60,6 +64,15 @@ export function createSelectionController() {
   /** @type {Map<string, google.maps.Marker>} */
   const markersById = new Map();
   const targeting = createTargetingController();
+  /** @type {string} */
+  let regionLabel = 'Region';
+
+  function selectionLimits() {
+    return {
+      min: config?.defaults.minSelections ?? 1,
+      max: config?.defaults.maxSelections ?? 12,
+    };
+  }
 
   function willLoseWork() {
     return willLoseSelection(candidates);
@@ -92,40 +105,42 @@ export function createSelectionController() {
   }
 
   function updateSelectionUi() {
-    const required = config?.defaults.requiredSelections ?? 12;
+    const { min, max } = selectionLimits();
     const count = selectedCount(candidates);
-    const exact = isExactSelection(candidates, required);
+    const valid = isValidSelection(candidates, min, max);
 
     const counterEl = byId('selection-counter');
     if (counterEl) {
-      counterEl.textContent = `${count} / ${required}`;
-      counterEl.classList.toggle('is-exact', exact);
-      counterEl.classList.toggle('is-over', count > required);
-      counterEl.classList.toggle('is-under', count > 0 && count < required);
+      counterEl.textContent = `${count} / ${max}`;
+      counterEl.classList.toggle('is-exact', valid);
+      counterEl.classList.toggle('is-over', count > max);
+      counterEl.classList.toggle('is-under', count > 0 && count < min);
     }
 
     const statusEl = byId('candidates-status');
     if (statusEl) {
       if (candidates.length === 0) {
-        statusEl.textContent = 'No candidates loaded.';
-      } else if (exact) {
-        statusEl.textContent = `${candidates.length} candidates — shortlist ready. Click Save Targets.`;
+        statusEl.textContent = 'No targets loaded.';
+      } else if (valid) {
+        statusEl.textContent = `${candidates.length} on map — shortlist ready (${count} selected). Click Save Targets.`;
+      } else if (count === 0) {
+        statusEl.textContent = `${candidates.length} on map. Select at least ${min} (max ${max}).`;
       } else {
-        statusEl.textContent = `${candidates.length} candidates on map. Select ${required}.`;
+        statusEl.textContent = `${candidates.length} on map. Select ${min}–${max} (currently ${count}).`;
       }
     }
 
     const saveBtn = byIdAs('btn-save-targets');
-    if (saveBtn) saveBtn.disabled = !exact;
+    if (saveBtn) saveBtn.disabled = !valid;
 
     const loadBtn = byIdAs('btn-load-dots');
     if (loadBtn) {
       loadBtn.disabled = !currentCenter || !config;
       loadBtn.textContent =
-        candidates.length > 0 ? 'Reload dots' : 'Load dots';
+        candidates.length > 0 ? 'Reload targets' : 'Load targets';
     }
 
-    targeting.syncWithSelection(candidates, required);
+    targeting.syncWithSelection(candidates);
   }
 
   function clearCandidateMarkers() {
@@ -153,14 +168,14 @@ export function createSelectionController() {
    */
   function onDotClick(id) {
     if (!config) return;
+    const { max } = selectionLimits();
     const result = toggleDotSelection(candidates, id, {
-      requiredSelections: config.defaults.requiredSelections,
-      blockExtraSelections: config.defaults.blockExtraSelections,
+      maxSelections: max,
     });
     if (result.blocked) {
       setFieldError(
         'candidates-error',
-        `Select exactly ${config.defaults.requiredSelections}. Deselect one first.`
+        `Maximum ${max} targets. Deselect one first.`
       );
       return;
     }
@@ -203,7 +218,7 @@ export function createSelectionController() {
     if (!willLoseWork()) return true;
 
     return confirmAction(
-      `${reason} This clears the current selection and removes candidate dots.`,
+      `${reason} This clears the current selection and removes candidate targets.`,
       {
         title: 'Reset map area?',
         confirmLabel: 'Reset',
@@ -213,7 +228,6 @@ export function createSelectionController() {
   }
 
   /**
-   * Same lat/lng does not clear candidates (source label may still update).
    * @param {LatLng} center
    * @param {LatLng | null} previous
    */
@@ -227,9 +241,55 @@ export function createSelectionController() {
 
   /**
    * @param {LatLng} center
+   * @returns {Promise<string>}
+   */
+  async function resolveRegionLabel(center) {
+    try {
+      const res = await fetch(
+        `/api/geocode/reverse?lat=${encodeURIComponent(String(center.lat))}&lng=${encodeURIComponent(String(center.lng))}`
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return regionLabel || 'Region';
+      return regionLabelFromGeocode(
+        body.addressComponents || [],
+        body.formattedAddress || ''
+      );
+    } catch {
+      return regionLabel || 'Region';
+    }
+  }
+
+  /**
+   * @param {CandidateDot} dot
+   * @returns {Promise<string | null>}
+   */
+  async function resolvePlaceNameForDot(dot) {
+    try {
+      const res = await fetch(
+        `/api/geocode/reverse?lat=${encodeURIComponent(String(dot.lat))}&lng=${encodeURIComponent(String(dot.lng))}`
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return null;
+      const results = Array.isArray(body.results) ? body.results : [];
+      for (const result of results) {
+        const name = specificPlaceName(result);
+        if (name) return name;
+      }
+      return specificPlaceName({
+        types: body.types,
+        formatted_address: body.formattedAddress,
+        address_components: body.addressComponents,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * @param {LatLng} center
    * @param {CenterSource} source
-   * @param {{ fit?: boolean, skipConfirm?: boolean, clearCandidates?: boolean }} [opts]
-   * @returns {Promise<boolean>} whether the center was applied
+   * @param {{ fit?: boolean, skipConfirm?: boolean, clearCandidates?: boolean, regionLabel?: string }} [opts]
+   * @returns {Promise<boolean>}
    */
   async function setCenter(center, source, opts = {}) {
     if (!map) return false;
@@ -238,6 +298,7 @@ export function createSelectionController() {
       fit = true,
       skipConfirm = false,
       clearCandidates = true,
+      regionLabel: nextRegion,
     } = opts;
     const samePoint = sameCoordinates(center, currentCenter);
 
@@ -250,6 +311,11 @@ export function createSelectionController() {
 
     currentCenter = { lat: center.lat, lng: center.lng };
     currentSource = source;
+    if (typeof nextRegion === 'string' && nextRegion.trim()) {
+      regionLabel = nextRegion.trim();
+    } else if (!samePoint) {
+      regionLabel = await resolveRegionLabel(currentCenter);
+    }
 
     const radiusMeters = currentRadiusMiles * METERS_PER_MILE;
 
@@ -336,6 +402,7 @@ export function createSelectionController() {
     currentCenter = { ...runtimeConfig.defaults.center };
     currentSource = 'default';
     currentRadiusMiles = runtimeConfig.defaults.radiusMiles;
+    regionLabel = 'Region';
 
     const radiusInput = byIdAs('input-radius');
     if (radiusInput) radiusInput.value = String(currentRadiusMiles);
@@ -352,9 +419,9 @@ export function createSelectionController() {
 
     if (willLoseWork() && config.defaults.confirmOnRecenter) {
       const ok = await confirmAction(
-        'Loading new candidates clears your current selection.',
+        'Loading new targets clears your current selection.',
         {
-          title: 'Reload candidates?',
+          title: 'Reload targets?',
           confirmLabel: 'Reload',
           cancelLabel: 'Keep current',
         }
@@ -423,27 +490,54 @@ export function createSelectionController() {
     return true;
   }
 
-  function saveTargets() {
+  async function saveTargets() {
     if (!config || !currentCenter) return;
-    const required = config.defaults.requiredSelections;
-    if (!isExactSelection(candidates, required)) {
+    const { min, max } = selectionLimits();
+    if (!isValidSelection(candidates, min, max)) {
       setFieldError(
         'candidates-error',
-        `Select exactly ${required} candidates before saving.`
+        `Select between ${min} and ${max} targets before saving.`
       );
       return;
     }
 
     setFieldError('candidates-error', '');
-    targeting.openWithRows(rowsFromSelectedDots(candidates));
+    const saveBtn = byIdAs('btn-save-targets');
+    if (saveBtn) saveBtn.disabled = true;
+
+    try {
+      if (!regionLabel || regionLabel === 'Region') {
+        regionLabel = await resolveRegionLabel(currentCenter);
+      }
+
+      const selected = candidates.filter((dot) => dot.selected);
+      /** @type {Record<string, string | null>} */
+      const placeNamesByCandidateId = {};
+      await Promise.all(
+        selected.map(async (dot) => {
+          placeNamesByCandidateId[dot.id] = await resolvePlaceNameForDot(dot);
+        })
+      );
+
+      targeting.openWithRows(
+        rowsFromSelectedDots(candidates, {
+          regionLabel,
+          placeNamesByCandidateId,
+        })
+      );
+    } finally {
+      updateSelectionUi();
+    }
   }
 
   function downloadTargets() {
     if (!config || !currentCenter) return;
+    const { min, max } = selectionLimits();
 
-    const collected = targeting.collectValidated(
-      config.defaults.requiredSelections
-    );
+    const collected = targeting.collectValidated({
+      minSelections: min,
+      maxSelections: max,
+    });
     if (!collected.ok) {
       setFieldError('targeting-error', collected.message);
       return;
@@ -454,7 +548,8 @@ export function createSelectionController() {
       source: currentSource,
       radiusMiles: currentRadiusMiles,
       dotCount: config.defaults.dotCount,
-      requiredSelections: config.defaults.requiredSelections,
+      minSelections: min,
+      maxSelections: max,
       seed: null,
       rows: collected.rows,
     });
@@ -505,7 +600,15 @@ export function createSelectionController() {
           return;
         }
 
-        await setCenter({ lat: body.lat, lng: body.lng }, 'address');
+        const label = regionLabelFromGeocode(
+          body.addressComponents || [],
+          body.formattedAddress || q
+        );
+        await setCenter(
+          { lat: body.lat, lng: body.lng },
+          'address',
+          { regionLabel: label }
+        );
       } catch (err) {
         console.error(err);
         setFieldError(
@@ -557,7 +660,7 @@ export function createSelectionController() {
 
     saveBtn?.addEventListener('click', () => {
       if (saveBtn.disabled) return;
-      saveTargets();
+      void saveTargets();
     });
 
     downloadBtn?.addEventListener('click', () => {
@@ -578,5 +681,6 @@ export function createSelectionController() {
     getRadiusMiles: () => currentRadiusMiles,
     getSource: () => currentSource,
     getCandidates: () => candidates.slice(),
+    getRegionLabel: () => regionLabel,
   };
 }

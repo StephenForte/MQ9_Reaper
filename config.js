@@ -41,14 +41,23 @@ export function parseFrontmatter(text) {
 export function toAppConfig(raw) {
   const radiusMiles = Number(raw.radiusMiles);
   const dotCount = Number(raw.dotCount);
-  const requiredSelections = Number(raw.requiredSelections);
+  // Prefer min/max; fall back to legacy requiredSelections as max.
+  const minSelections = Number(
+    raw.minSelections !== undefined ? raw.minSelections : '1'
+  );
+  const maxSelections = Number(
+    raw.maxSelections !== undefined
+      ? raw.maxSelections
+      : raw.requiredSelections !== undefined
+        ? raw.requiredSelections
+        : '12'
+  );
   const defaultCenterLat = Number(raw.defaultCenterLat);
   const defaultCenterLng = Number(raw.defaultCenterLng);
 
   const minDotSpacingMeters = Number(raw.minDotSpacingMeters);
   const mapType = raw.mapType === 'satellite' ? 'satellite' : 'hybrid';
   const radiusUnit = raw.radiusUnit === 'km' ? 'km' : 'miles';
-  const blockExtraSelections = raw.blockExtraSelections !== 'false';
   const confirmOnRecenter = raw.confirmOnRecenter !== 'false';
   const seededRng = raw.seededRng === 'true';
 
@@ -58,11 +67,17 @@ export function toAppConfig(raw) {
   if (!Number.isInteger(dotCount) || dotCount < 2) {
     throw new Error('config: dotCount must be an integer >= 2');
   }
-  if (!Number.isInteger(requiredSelections) || requiredSelections < 1) {
-    throw new Error('config: requiredSelections must be an integer >= 1');
+  if (!Number.isInteger(minSelections) || minSelections < 1) {
+    throw new Error('config: minSelections must be an integer >= 1');
   }
-  if (!(requiredSelections < dotCount)) {
-    throw new Error('config: requiredSelections must be < dotCount');
+  if (!Number.isInteger(maxSelections) || maxSelections < 1) {
+    throw new Error('config: maxSelections must be an integer >= 1');
+  }
+  if (!(minSelections <= maxSelections)) {
+    throw new Error('config: minSelections must be <= maxSelections');
+  }
+  if (!(maxSelections < dotCount)) {
+    throw new Error('config: maxSelections must be < dotCount');
   }
   if (!Number.isFinite(minDotSpacingMeters) || minDotSpacingMeters < 0) {
     throw new Error('config: minDotSpacingMeters must be a number >= 0');
@@ -77,8 +92,8 @@ export function toAppConfig(raw) {
   return {
     radiusMiles,
     dotCount,
-    requiredSelections,
-    blockExtraSelections,
+    minSelections,
+    maxSelections,
     minDotSpacingMeters,
     mapType,
     radiusUnit,

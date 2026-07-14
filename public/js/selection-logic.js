@@ -1,5 +1,5 @@
 /**
- * Pure selection helpers (P2) — kept free of DOM / Maps for unit tests.
+ * Pure selection helpers — kept free of DOM / Maps for unit tests.
  */
 
 /**
@@ -32,40 +32,41 @@ export function selectedIds(dots) {
 }
 
 /**
+ * Valid shortlist: at least min, at most max.
  * @param {CandidateDot[]} dots
- * @param {number} required
+ * @param {number} min
+ * @param {number} max
  * @returns {boolean}
  */
+export function isValidSelection(dots, min, max) {
+  const count = selectedCount(dots);
+  return count >= min && count <= max;
+}
+
+/** @deprecated Prefer isValidSelection — kept for older tests during transition. */
 export function isExactSelection(dots, required) {
   return selectedCount(dots) === required;
 }
 
 /**
  * @param {number} currentSelected
- * @param {number} required
- * @param {boolean} blockExtra
+ * @param {number} max
  * @param {boolean} currentlySelected
- * @returns {boolean} whether selecting this unselected dot is allowed
+ * @returns {boolean} whether selecting this unselected target is allowed
  */
-export function canSelectDot(
-  currentSelected,
-  required,
-  blockExtra,
-  currentlySelected
-) {
+export function canSelectDot(currentSelected, max, currentlySelected) {
   if (currentlySelected) return true;
-  if (!blockExtra && currentSelected >= required) return true;
-  if (blockExtra && currentSelected >= required) return false;
+  if (currentSelected >= max) return false;
   return true;
 }
 
 /**
- * Toggle selection on a dot by id. Returns a new array (immutable).
- * When blocked by exact-N gate, returns the same dots reference.
+ * Toggle selection on a candidate by id. Returns a new array (immutable).
+ * Blocks selecting above maxSelections.
  *
  * @param {CandidateDot[]} dots
  * @param {string} id
- * @param {{ requiredSelections: number, blockExtraSelections: boolean }} opts
+ * @param {{ maxSelections: number }} opts
  * @returns {{ dots: CandidateDot[], changed: boolean, blocked: boolean }}
  */
 export function toggleDotSelection(dots, id, opts) {
@@ -76,14 +77,7 @@ export function toggleDotSelection(dots, id, opts) {
 
   const target = dots[index];
   const count = selectedCount(dots);
-  if (
-    !canSelectDot(
-      count,
-      opts.requiredSelections,
-      opts.blockExtraSelections,
-      target.selected
-    )
-  ) {
+  if (!canSelectDot(count, opts.maxSelections, target.selected)) {
     return { dots, changed: false, blocked: true };
   }
 

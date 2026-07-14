@@ -3,6 +3,8 @@
  * Shared by P3 export and (later) P4 upload.
  */
 
+import { resolveTargetName } from './place-names.js';
+
 /** @typedef {{ lat: number, lng: number }} LatLng */
 /** @typedef {'address' | 'click' | 'latlng'} ExportCenterSource */
 /** @typedef {'address' | 'click' | 'latlng' | 'default'} CenterSource */
@@ -72,22 +74,37 @@ export function targetIdAt(index) {
 }
 
 /**
- * Snapshot selected candidates into editable targeting rows.
+ * Snapshot selected candidates into editable targeting rows with defaults.
  * @param {Array<{ id: string, lat: number, lng: number, selected: boolean }>} dots
+ * @param {{
+ *   regionLabel?: string,
+ *   placeNamesByCandidateId?: Record<string, string | null | undefined>,
+ * }} [opts]
  * @returns {TargetingRow[]}
  */
-export function rowsFromSelectedDots(dots) {
+export function rowsFromSelectedDots(dots, opts = {}) {
+  const regionLabel = opts.regionLabel || 'Region';
+  const placeNames = opts.placeNamesByCandidateId || {};
+
   return dots
     .filter((dot) => dot.selected)
-    .map((dot, index) => ({
-      id: targetIdAt(index),
-      name: '',
-      lat: dot.lat,
-      lng: dot.lng,
-      confidence: null,
-      priority: '',
-      candidateId: dot.id,
-    }));
+    .map((dot, index) => {
+      const index1Based = index + 1;
+      const placeName = placeNames[dot.id];
+      return {
+        id: targetIdAt(index),
+        name: resolveTargetName({
+          regionLabel,
+          index1Based,
+          placeName,
+        }),
+        lat: dot.lat,
+        lng: dot.lng,
+        confidence: 1,
+        priority: 'medium',
+        candidateId: dot.id,
+      };
+    });
 }
 
 /**
@@ -131,7 +148,7 @@ export function validateTargetingRow(row) {
 
 /**
  * @param {TargetingRow[]} rows
- * @param {number} required
+ * @param {{ minSelections: number, maxSelections: number }} limits
  * @returns {{
  *   ok: true,
  *   rows: TargetingRow[],
@@ -142,11 +159,15 @@ export function validateTargetingRow(row) {
  *   field?: string,
  * }}
  */
-export function validateTargetingRows(rows, required) {
-  if (!Array.isArray(rows) || rows.length !== required) {
+export function validateTargetingRows(rows, limits) {
+  const { minSelections, maxSelections } = limits;
+  if (!Array.isArray(rows)) {
+    return { ok: false, message: 'Expected a list of targets.' };
+  }
+  if (rows.length < minSelections || rows.length > maxSelections) {
     return {
       ok: false,
-      message: `Expected ${required} targets, found ${Array.isArray(rows) ? rows.length : 0}.`,
+      message: `Select between ${minSelections} and ${maxSelections} targets (found ${rows.length}).`,
     };
   }
 
@@ -171,7 +192,8 @@ export function validateTargetingRows(rows, required) {
  *   source: CenterSource,
  *   radiusMiles: number,
  *   dotCount: number,
- *   requiredSelections: number,
+ *   minSelections: number,
+ *   maxSelections: number,
  *   seed?: number | null,
  *   rows: TargetingRow[],
  *   createdAt?: string,
@@ -179,8 +201,10 @@ export function validateTargetingRows(rows, required) {
  * @returns {{ ok: true, document: TargetFile } | { ok: false, message: string, rowIndex?: number, field?: string }}
  */
 export function buildTargetFile(input) {
-  const required = input.requiredSelections;
-  const validated = validateTargetingRows(input.rows, required);
+  const validated = validateTargetingRows(input.rows, {
+    minSelections: input.minSelections,
+    maxSelections: input.maxSelections,
+  });
   if (!validated.ok) {
     return validated;
   }
@@ -190,6 +214,8 @@ export function buildTargetFile(input) {
   }
 
   const createdAt = input.createdAt || new Date().toISOString();
+  // §4 keeps requiredSelections; write the actual exported count.
+  const requiredSelections = validated.rows.length;
   /** @type {TargetFile} */
   const document = {
     version: SCHEMA_VERSION,
@@ -202,7 +228,7 @@ export function buildTargetFile(input) {
     radiusMiles: input.radiusMiles,
     generation: {
       dotCount: input.dotCount,
-      requiredSelections: required,
+      requiredSelections,
       seed: input.seed === undefined ? null : input.seed,
     },
     targets: validated.rows.map((row) => ({

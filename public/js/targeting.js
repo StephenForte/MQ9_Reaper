@@ -295,19 +295,16 @@ export function createTargetingController() {
   /**
    * Mark draft stale when live selection no longer matches the snapshot.
    * @param {Array<{ id: string, selected: boolean }>} candidates
-   * @param {number} required
    */
-  function syncWithSelection(candidates, required) {
+  function syncWithSelection(candidates) {
     if (!visible) return;
 
-    const selectedIds = candidates
+    const liveIds = candidates
       .filter((dot) => dot.selected)
       .map((dot) => dot.id);
-    const sameCount = selectedIds.length === required;
     const sameIds =
-      sameCount &&
-      selectedIds.length === snapshotCandidateIds.length &&
-      selectedIds.every((id, i) => id === snapshotCandidateIds[i]);
+      liveIds.length === snapshotCandidateIds.length &&
+      liveIds.every((id, i) => id === snapshotCandidateIds[i]);
 
     if (sameIds) {
       if (stale) {
@@ -328,6 +325,7 @@ export function createTargetingController() {
   }
 
   /**
+   * @param {{ minSelections: number, maxSelections: number }} limits
    * @returns {{
    *   ok: true,
    *   rows: TargetingRow[],
@@ -338,7 +336,7 @@ export function createTargetingController() {
    *   field?: string,
    * }}
    */
-  function collectValidated(required) {
+  function collectValidated(limits) {
     if (!visible) {
       return { ok: false, message: 'Save Targets first to build the list.' };
     }
@@ -356,10 +354,13 @@ export function createTargetingController() {
       if (article instanceof HTMLElement) clearRowError(article);
     });
 
-    if (rows.length !== required) {
+    if (
+      rows.length < limits.minSelections ||
+      rows.length > limits.maxSelections
+    ) {
       return {
         ok: false,
-        message: `Expected ${required} targets, found ${rows.length}.`,
+        message: `Select between ${limits.minSelections} and ${limits.maxSelections} targets (found ${rows.length}).`,
       };
     }
 

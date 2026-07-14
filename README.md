@@ -4,12 +4,12 @@ Two-tab web app for selecting and reviewing geographic points on a Google Maps s
 
 ## Current phase: P3 — Metadata + export
 
-- **Save Targets** opens the targeting list for the exact-N shortlist
-- Annotate each row: name, confidence (1–5), priority (low/medium/high/critical)
-- **Download JSON** exports a §4 schema file (`seed: null`) via client download
+- **Load targets** / select between `minSelections` and `maxSelections` (default 1–12)
+- **Save Targets** opens the targeting list with defaults (place name or `{Region} Target N`, confidence 1, priority medium)
+- **Download JSON** exports a §4 schema file (`seed: null`; `requiredSelections` = actual count)
 - Changing the shortlist after Save Targets marks the list stale until you Save again
 
-P2 selection (Load dots, exact-N gate, confirm-on-recenter) and P1 location inputs remain the base. Review upload is P4.
+P1 location inputs remain the base. Review upload is P4.
 
 ## Local setup
 
@@ -42,7 +42,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Without `GEOCODING_API_KEY`, map click and lat/long still work; address geocode returns 503.
 
-P3 exit check: center → **Load dots** → select exactly N → **Save Targets** → annotate all rows → **Download JSON** → open the file and confirm §4 shape.
+P3 exit check: center → **Load targets** → select 1–N → **Save Targets** → confirm defaults / edit → **Download JSON**.
 
 ## Deploy on Render
 
@@ -60,7 +60,8 @@ P3 exit check: center → **Load dots** → select exactly N → **Save Targets*
 |-------|---------|
 | `GET /api/health` | Liveness + whether Maps/geocoding keys are configured |
 | `GET /api/config` | Public Maps key + defaults (never geocoding key) |
-| `GET /api/geocode?q=` | Proxies Google Geocoding → `{ lat, lng, formattedAddress }` |
+| `GET /api/geocode?q=` | Proxies Google Geocoding → lat/lng + address metadata |
+| `GET /api/geocode/reverse?lat=&lng=` | Reverse geocode for region / place default names |
 
 ## Project layout
 

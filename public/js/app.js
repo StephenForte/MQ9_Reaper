@@ -10,8 +10,8 @@ import { hideMapError, showMapError } from './ui.js';
  *   defaults: {
  *     radiusMiles: number,
  *     dotCount: number,
- *     requiredSelections: number,
- *     blockExtraSelections: boolean,
+ *     minSelections: number,
+ *     maxSelections: number,
  *     minDotSpacingMeters: number,
  *     mapType: string,
  *     radiusUnit: string,

@@ -1,8 +1,8 @@
 ---
 radiusMiles: 3
 dotCount: 25
-requiredSelections: 12
-blockExtraSelections: true
+minSelections: 1
+maxSelections: 12
 minDotSpacingMeters: 50
 mapType: hybrid
 radiusUnit: miles
@@ -23,16 +23,16 @@ Later: an **Admin** section in the app will edit these in-app (see PRD phase **P
 | Key | Meaning |
 |-----|---------|
 | `radiusMiles` | Default radius (> 0). Unit is miles (`radiusUnit`); km toggle is out of scope for v1. |
-| `dotCount` | Candidate dots generated when the operator clicks **Load dots**. Must be greater than `requiredSelections`. |
-| `requiredSelections` | How many dots must be selected before Save Targets. |
-| `blockExtraSelections` | If `true`, selecting above `requiredSelections` is blocked (exact-N). If `false`, extras allowed but Save stays gated to exact N. |
-| `minDotSpacingMeters` | Minimum distance between candidate dots. Dots may be close, but must not overlap; rejection sampling retries until spaced. |
+| `dotCount` | Candidate targets generated when the operator clicks **Load targets**. Must be greater than `maxSelections`. |
+| `minSelections` | Minimum targets that must be selected before Save Targets (default 1). |
+| `maxSelections` | Maximum selectable targets; selecting above this is blocked (default 12). |
+| `minDotSpacingMeters` | Minimum distance between candidate targets. Close is allowed, overlap is not; rejection sampling retries until spaced. |
 | `mapType` | `hybrid` (imagery + labels) or `satellite`. |
 | `radiusUnit` | `miles` only in v1. |
-| `confirmOnRecenter` | If `true`, changing center/radius or reloading dots prompts when ≥1 candidate is selected. |
+| `confirmOnRecenter` | If `true`, changing center/radius or reloading targets prompts when ≥1 target is selected. |
 | `seededRng` | If `false`, export writes `seed: null`. Seeded RNG is not planned for v1. |
 | `defaultCenterLat` / `defaultCenterLng` | Startup / Review-placeholder map center. |
 
 ## Invariant
 
-`requiredSelections` must be `<` `dotCount`.
+`minSelections` ≤ `maxSelections` < `dotCount`.

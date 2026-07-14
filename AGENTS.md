@@ -30,10 +30,10 @@ Exit criteria are in the PRD §9. Demo each phase before expanding scope.
   - `GEOCODING_API_KEY` — server only. Never send to the client. Restrict by IP + Geocoding API.
   - Never commit `.env`.
 - **Persistence:** Client download/upload of JSON only. Do not add disk/DB storage unless the PRD is updated.
-- **Config defaults:** Edit `config/app-config.md` (YAML frontmatter). `config.js` loads it. Keep invariant `requiredSelections < dotCount`. Admin UI is P6 — do not invent a second config store.
+- **Config defaults:** Edit `config/app-config.md` (YAML frontmatter). `config.js` loads it. Keep invariant `minSelections ≤ maxSelections < dotCount`. Admin UI is P6 — do not invent a second config store.
 - **Maps:** Default `mapType` is `hybrid`.
-- **Recenter:** When `confirmOnRecenter` is true and ≥1 candidate is selected, prompt before center/radius change or Reload dots.
-- **Dots (P2):** Operator clicks **Load dots** (no auto-scatter). Use `public/js/dots.js` — uniform disk + `minDotSpacingMeters` rejection (close ok, overlap not). Center/radius change clears candidates until Load again.
+- **Recenter:** When `confirmOnRecenter` is true and ≥1 candidate is selected, prompt before center/radius change or Reload targets.
+- **Targets (P2/P3):** Operator clicks **Load targets** (no auto-scatter). Use `public/js/dots.js` — uniform disk + `minDotSpacingMeters` rejection (close ok, overlap not). Center/radius change clears candidates until Load again. Selection requires `minSelections`–`maxSelections` (default 1–12).
 - **Admin (P6):** Protect with env `ADMIN_USERNAME` / `ADMIN_PASSWORD` only — no OAuth.
 ## Repo layout
 
@@ -86,21 +86,23 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 |-------|---------|
 | `GET /api/health` | `{ ok, mapsKeyConfigured, geocodingConfigured }` |
 | `GET /api/config` | `{ mapsApiKey, defaults }` — never geocoding key |
-| `GET /api/geocode?q=` | `{ lat, lng, formattedAddress }` or error JSON |
+| `GET /api/geocode?q=` | `{ lat, lng, formattedAddress, addressComponents, types }` or error JSON |
+| `GET /api/geocode/reverse?lat=&lng=` | Reverse geocode payload for region / place names |
 
 ## Product decisions in force
 
 1. Render Web Service + geocode proxy (Q1).
 2. Client download/upload only (Q2).
-3. Exact N selections; `blockExtraSelections` configurable (Q3 — wire in P2).
+3. Selection count: at least `minSelections`, at most `maxSelections` (defaults 1–12). Selecting above max is blocked.
 4. Dots may be close but must not overlap; `minDotSpacingMeters` (default 50) via rejection sampling (Q4).
-5. Confirm on recenter when ≥1 candidate is selected (`confirmOnRecenter`). Dots load only via **Load dots**.
+5. Confirm on recenter when ≥1 candidate is selected (`confirmOnRecenter`). Targets load only via **Load targets**.
 6. Config via `config/app-config.md` now; Admin in P6 (Q6).
 7. `hybrid` default map type (Q7).
 8. Review shows metadata on marker click (Q8 — P4).
 9. Unseeded RNG; export `seed: null` (Q9).
 10. Miles only in v1 (Q10).
 11. P6 Admin auth = simple `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars.
+12. Default annotation on Save Targets: place/address name when reverse-geocode finds one, else `{Region} Target N`; confidence `1`; priority `medium`.
 
 ## Local checklist
 
