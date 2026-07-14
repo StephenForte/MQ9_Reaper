@@ -239,10 +239,17 @@ export function createTargetingController() {
     if (!downloadBtn) return;
     if (!visible || stale || rows.length === 0) {
       downloadBtn.disabled = true;
+      downloadBtn.title = stale
+        ? 'Selection changed — save targets again'
+        : 'Complete the targeting list first';
       return;
     }
     syncAllFromDom();
-    downloadBtn.disabled = !rows.every((row) => validateTargetingRow(row).ok);
+    const ready = rows.every((row) => validateTargetingRow(row).ok);
+    downloadBtn.disabled = !ready;
+    downloadBtn.title = ready
+      ? 'Download annotated targets as JSON'
+      : 'Fill name, confidence, and priority on every row';
   }
 
   function render() {

@@ -29,6 +29,15 @@ describe('selectedCount / isValidSelection', () => {
     assert.equal(isValidSelection(dots, 3, 12), false);
     assert.equal(isValidSelection(dotsFrom([]), 1, 12), false);
   });
+
+  it('treats over-max as invalid even when extras are allowed', () => {
+    const dots = dotsFrom([
+      { selected: true },
+      { selected: true },
+      { selected: true },
+    ]);
+    assert.equal(isValidSelection(dots, 1, 2), false);
+  });
 });
 
 describe('getSelectedDots / selectedIds', () => {
@@ -51,8 +60,19 @@ describe('canSelectDot / maxSelections', () => {
     assert.equal(canSelectDot(12, 12, true), true);
   });
 
-  it('blocks selecting above max', () => {
+  it('blocks selecting above max when blockExtraSelections is true', () => {
     assert.equal(canSelectDot(12, 12, false), false);
+    assert.equal(
+      canSelectDot(12, 12, false, { blockExtraSelections: true }),
+      false
+    );
+  });
+
+  it('allows selecting above max when blockExtraSelections is false', () => {
+    assert.equal(
+      canSelectDot(12, 12, false, { blockExtraSelections: false }),
+      true
+    );
   });
 
   it('allows selecting below max', () => {
@@ -73,12 +93,24 @@ describe('toggleDotSelection', () => {
     assert.equal(deselected.dots[0].selected, false);
   });
 
-  it('blocks extra selection at max', () => {
+  it('blocks extra selection at max when blockExtraSelections is true', () => {
     const dots = dotsFrom([{ selected: true }, { selected: false }]);
     const result = toggleDotSelection(dots, 'd-02', { maxSelections: 1 });
     assert.equal(result.blocked, true);
     assert.equal(result.changed, false);
     assert.equal(result.dots, dots);
+  });
+
+  it('allows extra selection when blockExtraSelections is false', () => {
+    const dots = dotsFrom([{ selected: true }, { selected: false }]);
+    const result = toggleDotSelection(dots, 'd-02', {
+      maxSelections: 1,
+      blockExtraSelections: false,
+    });
+    assert.equal(result.blocked, false);
+    assert.equal(result.changed, true);
+    assert.equal(result.dots[1].selected, true);
+    assert.equal(isValidSelection(result.dots, 1, 1), false);
   });
 });
 

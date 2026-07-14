@@ -282,11 +282,11 @@ Evergreen desktop browsers, latest two versions: Chrome, Edge, Firefox, Safari. 
 |------|-------------------|
 | **Bad / unresolvable address** | Geocoding returns zero results or an error → show inline message ("Couldn't find that address"); do not move the map. |
 | **Missing / invalid lat/long** | Validate ranges before use; empty or out-of-range → inline field error; don't recenter. |
-| **Fewer than 12 selected** | Save Targets stays disabled; counter shows `n/12`. No silent proceed. |
-| **More than 12 selected** | Prevented per §5.4 (button disabled unless exactly 12), or block the 13th click — see Q3. |
+| **Fewer than `minSelections` selected** | Save Targets stays disabled; counter shows `n / maxSelections`. No silent proceed. |
+| **More than `maxSelections` selected** | If `blockExtraSelections` is true (default), block the next click. If false, allow extras but keep Save gated to the min–max range. |
 | **Incomplete targeting rows** | Export blocked; highlight the offending rows/fields. |
-| **Malformed JSON on upload** | Catch parse error → "This file isn't valid JSON." Don't attempt render. |
-| **Schema-invalid JSON** (valid JSON, wrong shape / missing fields / wrong `targets` length) | Show which check failed (e.g., "expected 12 targets, found 9"); don't render. |
+| **Malformed JSON on upload** | Catch parse error → "This file isn't valid JSON." Don't attempt render; clear any previous Review map/list. |
+| **Schema-invalid JSON** (valid JSON, wrong shape / missing fields / wrong `targets` length) | Show which check failed (e.g., "expected 12 targets, found 9"); don't render; clear any previous Review map/list. |
 | **Geocode backend/network failure** | Surface a retry-able error; app remains usable via click / lat-long input. |
 | **Google Maps fails to load** (key/quota/network) | Show a blocking but clear error state rather than a blank tab. |
 
@@ -318,7 +318,7 @@ Evergreen desktop browsers, latest two versions: Chrome, Edge, Firefox, Safari. 
 
 1. **Q1 — Backend or static?** → Render Web Service + geocode proxy.
 2. **Q2 — Storage in v1?** → Client download/upload only.
-3. **Q3 — Selection count semantics.** → Exact N (`requiredSelections`, default 12). `blockExtraSelections` (default `true`) is configurable in `config/app-config.md`; Admin UI in P6.
+3. **Q3 — Selection count semantics.** → Range: at least `minSelections`, at most `maxSelections` (defaults 1–12). Save enables when count is in range. `blockExtraSelections` (default `true`) blocks selecting above max; when `false`, extras are allowed but Save stays gated. Configurable in `config/app-config.md`; Admin UI in P6.
 4. **Q5 — Losing work on recenter.** → Yes, confirm when change would clear selection / regenerate dots (`confirmOnRecenter`).
 5. **Q6 / config delivery.** → MD file now (`config/app-config.md`); Admin section in **P6**.
 6. **Q7 — Map type default.** → `hybrid`.

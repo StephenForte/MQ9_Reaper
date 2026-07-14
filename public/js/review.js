@@ -222,6 +222,15 @@ export function createReviewController() {
     updateMetaUi();
   }
 
+  function clearLoadedDocument() {
+    loadedFile = null;
+    loadedFilename = '';
+    clearTargetMarkers();
+    overlay?.clear();
+    renderTargetList();
+    updateMetaUi();
+  }
+
   /**
    * @param {string} text
    * @param {string} [filename]
@@ -231,7 +240,7 @@ export function createReviewController() {
     const parsed = parseTargetFileJson(text);
     if (!parsed.ok) {
       setFieldError('review-error', parsed.message);
-      // Keep previous successful render (product choice for invalid upload).
+      clearLoadedDocument();
       return false;
     }
 
@@ -260,6 +269,7 @@ export function createReviewController() {
       };
       reader.onerror = () => {
         setFieldError('review-error', 'Could not read that file.');
+        clearLoadedDocument();
         resolve(false);
       };
       reader.readAsText(file);

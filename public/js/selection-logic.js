@@ -47,21 +47,28 @@ export function isValidSelection(dots, min, max) {
  * @param {number} currentSelected
  * @param {number} max
  * @param {boolean} currentlySelected
+ * @param {{ blockExtraSelections?: boolean }} [opts]
  * @returns {boolean} whether selecting this unselected target is allowed
  */
-export function canSelectDot(currentSelected, max, currentlySelected) {
+export function canSelectDot(
+  currentSelected,
+  max,
+  currentlySelected,
+  opts = {}
+) {
   if (currentlySelected) return true;
-  if (currentSelected >= max) return false;
+  const blockExtra = opts.blockExtraSelections !== false;
+  if (blockExtra && currentSelected >= max) return false;
   return true;
 }
 
 /**
  * Toggle selection on a candidate by id. Returns a new array (immutable).
- * Blocks selecting above maxSelections.
+ * When blockExtraSelections is true (default), blocks selecting above max.
  *
  * @param {CandidateDot[]} dots
  * @param {string} id
- * @param {{ maxSelections: number }} opts
+ * @param {{ maxSelections: number, blockExtraSelections?: boolean }} opts
  * @returns {{ dots: CandidateDot[], changed: boolean, blocked: boolean }}
  */
 export function toggleDotSelection(dots, id, opts) {
@@ -72,7 +79,11 @@ export function toggleDotSelection(dots, id, opts) {
 
   const target = dots[index];
   const count = selectedCount(dots);
-  if (!canSelectDot(count, opts.maxSelections, target.selected)) {
+  if (
+    !canSelectDot(count, opts.maxSelections, target.selected, {
+      blockExtraSelections: opts.blockExtraSelections,
+    })
+  ) {
     return { dots, changed: false, blocked: true };
   }
 

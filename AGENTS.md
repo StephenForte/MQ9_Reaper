@@ -33,7 +33,7 @@ Exit criteria are in the PRD §9. Demo each phase before expanding scope.
 - **Config defaults:** Edit `config/app-config.md` (YAML frontmatter). `config.js` loads it. Keep invariant `minSelections ≤ maxSelections < dotCount`. Admin UI is P6 — do not invent a second config store.
 - **Maps:** Default `mapType` is `hybrid`.
 - **Recenter:** When `confirmOnRecenter` is true and ≥1 candidate is selected, prompt before center/radius change or Reload targets.
-- **Targets (P2/P3):** Operator clicks **Load targets** (no auto-scatter). Use `public/js/dots.js` — uniform disk + `minDotSpacingMeters` rejection (close ok, overlap not). Center/radius change clears candidates until Load again. Selection requires `minSelections`–`maxSelections` (default 1–12).
+- **Targets (P2/P3):** Operator clicks **Load targets** (no auto-scatter). Use `public/js/dots.js` — uniform disk + `minDotSpacingMeters` rejection (close ok, overlap not). Center/radius change clears candidates until Load again. Selection requires `minSelections`–`maxSelections` (default 1–12). When `blockExtraSelections` is true (default), selecting above max is blocked; when false, extras are allowed but Save stays gated to the range.
 - **Admin (P6):** Protect with env `ADMIN_USERNAME` / `ADMIN_PASSWORD` only — no OAuth.
 ## Repo layout
 
@@ -51,6 +51,7 @@ public/
     selection.js          Selection-tab center, radius, candidates, export
     selection-forms.js    Selection location / radius form wiring
     selection-logic.js    Pure selection helpers (testable)
+    reverse-geocode.js  Client reverse-geocode fetch helper
     review.js             Review-tab upload, render, InfoWindows
     review-logic.js       Pure parse + Review display helpers (testable)
     map-radius-overlay.js Shared center pin + radius circle + fitBounds
@@ -65,8 +66,8 @@ public/
     maps-loader.js        Google Maps script loader
     constants.js          Miles/meters constants
     dom.js                Small DOM helpers
-    ui.js                 Field/map error helpers
-test/                     node:test (dots, geo, selection-logic, schema, review-logic, config)
+    ui.js                 Field/map/status helpers
+test/                     node:test (dots, geo, selection-logic, schema, review-logic, config, geocode, api)
 render.yaml               Render Blueprint
 target-selection-app-PRD.md
 ```
@@ -89,7 +90,7 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 
 | Route | Returns |
 |-------|---------|
-| `GET /api/health` | `{ ok, mapsKeyConfigured, geocodingConfigured }` |
+| `GET /api/health` | `{ ok, mapsKeyConfigured, geocodingConfigured }` (+ optional `geocodingProbe` when `?probe=geocode`) |
 | `GET /api/config` | `{ mapsApiKey, defaults }` — never geocoding key |
 | `GET /api/geocode?q=` | `{ lat, lng, formattedAddress, addressComponents, types }` or error JSON |
 | `GET /api/geocode/reverse?lat=&lng=` | Reverse geocode payload for region / place names |
@@ -98,16 +99,16 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 
 1. Render Web Service + geocode proxy (Q1).
 2. Client download/upload only (Q2).
-3. Selection count: at least `minSelections`, at most `maxSelections` (defaults 1–12). Selecting above max is blocked.
+3. Selection count: at least `minSelections`, at most `maxSelections` (defaults 1–12). Selecting above max is blocked when `blockExtraSelections` is true (default).
 4. Dots may be close but must not overlap; `minDotSpacingMeters` (default 50) via rejection sampling (Q4).
 5. Confirm on recenter when ≥1 candidate is selected (`confirmOnRecenter`). Targets load only via **Load targets**.
 6. Config via `config/app-config.md` now; Admin in P6 (Q6).
 7. `hybrid` default map type (Q7).
-8. Review shows metadata on marker click (Q8 — P4).
+8. Review shows metadata on marker click (Q8 — P4). Invalid Review uploads clear the previous render (P5).
 9. Unseeded RNG; export `seed: null` (Q9).
 10. Miles only in v1 (Q10).
 11. P6 Admin auth = simple `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars.
-12. Default annotation on Save Targets: place/address name when reverse-geocode finds one, else `{Region} Target N`; confidence `1`; priority `medium`.
+12. Default annotation on Save Targets: place/address name when reverse-geocode finds one, else `{Region} Target N`; confidence `1`; priority `medium`. Show a non-blocking notice if reverse geocode fails.
 
 ## Local checklist
 

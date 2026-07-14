@@ -10,6 +10,7 @@
  *     dotCount: number,
  *     minSelections: number,
  *     maxSelections: number,
+ *     blockExtraSelections: boolean,
  *     minDotSpacingMeters: number,
  *     mapType: string,
  *     radiusUnit: string,

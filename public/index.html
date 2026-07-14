@@ -147,7 +147,13 @@
                 select or deselect.
               </p>
               <div class="candidates-actions">
-                <button type="button" class="btn btn-primary" id="btn-load-dots">
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  id="btn-load-dots"
+                  aria-describedby="candidates-status"
+                  title="Set a center first (address, map click, or lat/long)"
+                >
                   Load targets
                 </button>
                 <button
@@ -155,15 +161,19 @@
                   class="btn btn-primary"
                   id="btn-save-targets"
                   disabled
+                  aria-describedby="candidates-status"
+                  title="Select targets within the configured min–max range"
                 >
                   Save Targets
                 </button>
               </div>
               <div class="selection-meter" aria-live="polite">
                 <span class="field-label">Selected</span>
-                <span id="selection-counter" class="selection-counter">0 / 12</span>
+                <span id="selection-counter" class="selection-counter">0 / —</span>
               </div>
-              <p id="candidates-status" class="hint hint-tight">No targets loaded.</p>
+              <p id="candidates-status" class="hint hint-tight">
+                No targets loaded. Set a center, then click Load targets.
+              </p>
               <p id="candidates-error" class="field-error" role="alert" hidden></p>
             </section>
 
@@ -180,6 +190,12 @@
                 Name each target, set confidence (1–5) and priority, then
                 download JSON.
               </p>
+              <p
+                id="targeting-place-notice"
+                class="hint hint-warn hint-tight"
+                role="status"
+                hidden
+              ></p>
               <p
                 id="targeting-stale"
                 class="field-error"
@@ -256,6 +272,10 @@
                   accept=".json,application/json"
                 />
               </label>
+              <p class="hint hint-tight">
+                Invalid files clear the map and list so you only see a successful
+                load.
+              </p>
               <p id="review-error" class="field-error" role="alert" hidden></p>
               <p id="review-status" class="hint hint-tight">No file loaded.</p>
             </section>

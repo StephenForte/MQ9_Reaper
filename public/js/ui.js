@@ -1,4 +1,8 @@
 /**
+ * Field / map / status helpers (XSS-safe: textContent only).
+ */
+
+/**
  * @param {'select' | 'review'} panel
  * @param {string} title
  * @param {string} message
@@ -31,6 +35,23 @@ export function hideMapError(panel) {
  * @param {string} message empty string clears
  */
 export function setFieldError(id, message) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!message) {
+    el.hidden = true;
+    el.textContent = '';
+    return;
+  }
+  el.hidden = false;
+  el.textContent = message;
+}
+
+/**
+ * Non-blocking status / notice (not an error).
+ * @param {string} id
+ * @param {string} message empty string clears
+ */
+export function setStatusMessage(id, message) {
   const el = document.getElementById(id);
   if (!el) return;
   if (!message) {

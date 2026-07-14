@@ -1,5 +1,5 @@
 /**
- * Operator confirm dialog (styled). Falls back to window.confirm if DOM missing.
+ * Operator confirm dialog (styled overlay).
  * @param {string} message
  * @param {{ title?: string, confirmLabel?: string, cancelLabel?: string }} [opts]
  * @returns {Promise<boolean>}
@@ -54,8 +54,30 @@ export function confirmAction(message, opts = {}) {
       resolve(value);
     };
 
+    const focusables = () => [cancelBtn, okBtn];
+
     const onKey = (event) => {
-      if (event.key === 'Escape') finish(false);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        finish(false);
+        return;
+      }
+      if (event.key === 'Enter' && document.activeElement !== cancelBtn) {
+        event.preventDefault();
+        finish(true);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const nodes = focusables();
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
 
     const previousOverflow = document.body.style.overflow;

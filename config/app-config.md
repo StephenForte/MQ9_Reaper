@@ -3,6 +3,7 @@ radiusMiles: 3
 dotCount: 25
 minSelections: 1
 maxSelections: 12
+blockExtraSelections: true
 minDotSpacingMeters: 50
 mapType: hybrid
 radiusUnit: miles
@@ -25,7 +26,8 @@ Later: an **Admin** section in the app will edit these in-app (see PRD phase **P
 | `radiusMiles` | Default radius (> 0). Unit is miles (`radiusUnit`); km toggle is out of scope for v1. |
 | `dotCount` | Candidate targets generated when the operator clicks **Load targets**. Must be greater than `maxSelections`. |
 | `minSelections` | Minimum targets that must be selected before Save Targets (default 1). |
-| `maxSelections` | Maximum selectable targets; selecting above this is blocked (default 12). |
+| `maxSelections` | Maximum targets allowed in a valid shortlist (default 12). Save enables when selected count is within `[min, max]`. |
+| `blockExtraSelections` | If `true` (default), block selecting above `maxSelections`. If `false`, allow extras but keep Save gated to the min–max range. |
 | `minDotSpacingMeters` | Minimum distance between candidate targets. Close is allowed, overlap is not; rejection sampling retries until spaced. |
 | `mapType` | `hybrid` (imagery + labels) or `satellite`. |
 | `radiusUnit` | `miles` only in v1. |

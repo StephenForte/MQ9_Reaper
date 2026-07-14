@@ -44,7 +44,10 @@ export function wireSelectionForms(handlers) {
       return;
     }
 
-    if (geocodeBtn) geocodeBtn.disabled = true;
+    if (geocodeBtn) {
+      geocodeBtn.disabled = true;
+      geocodeBtn.textContent = 'Geocoding…';
+    }
 
     try {
       const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
@@ -74,7 +77,10 @@ export function wireSelectionForms(handlers) {
         'Geocoding request failed. Try again, or use map click / lat-long.'
       );
     } finally {
-      if (geocodeBtn) geocodeBtn.disabled = false;
+      if (geocodeBtn) {
+        geocodeBtn.disabled = false;
+        geocodeBtn.textContent = 'Geocode address';
+      }
     }
   });
 

@@ -8,6 +8,7 @@ import {
   regionLabelFromGeocode,
   specificPlaceName,
 } from './place-names.js';
+import { fetchReverseGeocode } from './reverse-geocode.js';
 import { buildTargetFile, rowsFromSelectedDots } from './schema.js';
 import { wireSelectionForms } from './selection-forms.js';
 import {
@@ -18,7 +19,7 @@ import {
   willLoseSelection,
 } from './selection-logic.js';
 import { createTargetingController } from './targeting.js';
-import { setFieldError } from './ui.js';
+import { setFieldError, setStatusMessage } from './ui.js';
 
 /**
  * @typedef {import('./app-types.js').LatLng} LatLng
@@ -55,6 +56,7 @@ export function createSelectionController() {
     return {
       min: config?.defaults.minSelections ?? 1,
       max: config?.defaults.maxSelections ?? 12,
+      blockExtra: config?.defaults.blockExtraSelections !== false,
     };
   }
 
@@ -96,6 +98,7 @@ export function createSelectionController() {
     const counterEl = byId('selection-counter');
     if (counterEl) {
       counterEl.textContent = `${count} / ${max}`;
+      counterEl.classList.toggle('is-ready', valid);
       counterEl.classList.toggle('is-exact', valid);
       counterEl.classList.toggle('is-over', count > max);
       counterEl.classList.toggle('is-under', count > 0 && count < min);
@@ -104,24 +107,39 @@ export function createSelectionController() {
     const statusEl = byId('candidates-status');
     if (statusEl) {
       if (candidates.length === 0) {
-        statusEl.textContent = 'No targets loaded.';
+        statusEl.textContent =
+          'No targets loaded. Set a center, then click Load targets.';
       } else if (valid) {
         statusEl.textContent = `${candidates.length} on map — shortlist ready (${count} selected). Click Save Targets.`;
       } else if (count === 0) {
         statusEl.textContent = `${candidates.length} on map. Select at least ${min} (max ${max}).`;
+      } else if (count > max) {
+        statusEl.textContent = `${candidates.length} on map. Deselect until ${min}–${max} (currently ${count}).`;
       } else {
         statusEl.textContent = `${candidates.length} on map. Select ${min}–${max} (currently ${count}).`;
       }
     }
 
     const saveBtn = byIdAs('btn-save-targets');
-    if (saveBtn) saveBtn.disabled = !valid;
+    if (saveBtn) {
+      saveBtn.disabled = !valid;
+      saveBtn.title = valid
+        ? 'Open targeting list for selected targets'
+        : candidates.length === 0
+          ? 'Load and select targets first'
+          : `Select between ${min} and ${max} targets`;
+    }
 
     const loadBtn = byIdAs('btn-load-dots');
     if (loadBtn) {
       loadBtn.disabled = !currentCenter || !config;
       loadBtn.textContent =
         candidates.length > 0 ? 'Reload targets' : 'Load targets';
+      loadBtn.title = loadBtn.disabled
+        ? 'Set a center first (address, map click, or lat/long)'
+        : candidates.length > 0
+          ? 'Generate a new set of candidate targets'
+          : 'Generate candidate targets inside the radius';
     }
 
     targeting.syncWithSelection(candidates);
@@ -134,6 +152,7 @@ export function createSelectionController() {
     markersById.clear();
     candidates = [];
     targeting.clear();
+    setStatusMessage('targeting-place-notice', '');
     updateSelectionUi();
   }
 
@@ -152,9 +171,10 @@ export function createSelectionController() {
    */
   function onDotClick(id) {
     if (!config) return;
-    const { max } = selectionLimits();
+    const { max, blockExtra } = selectionLimits();
     const result = toggleDotSelection(candidates, id, {
       maxSelections: max,
+      blockExtraSelections: blockExtra,
     });
     if (result.blocked) {
       setFieldError(
@@ -225,48 +245,42 @@ export function createSelectionController() {
 
   /**
    * @param {LatLng} center
-   * @returns {Promise<string>}
+   * @returns {Promise<{ label: string, ok: boolean }>}
    */
   async function resolveRegionLabel(center) {
-    try {
-      const res = await fetch(
-        `/api/geocode/reverse?lat=${encodeURIComponent(String(center.lat))}&lng=${encodeURIComponent(String(center.lng))}`
-      );
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) return regionLabel || 'Region';
-      return regionLabelFromGeocode(
-        body.addressComponents || [],
-        body.formattedAddress || ''
-      );
-    } catch {
-      return regionLabel || 'Region';
+    const result = await fetchReverseGeocode(center.lat, center.lng);
+    if (!result.ok) {
+      return { label: regionLabel || 'Region', ok: false };
     }
+    return {
+      label: regionLabelFromGeocode(
+        result.addressComponents,
+        result.formattedAddress
+      ),
+      ok: true,
+    };
   }
 
   /**
    * @param {CandidateDot} dot
-   * @returns {Promise<string | null>}
+   * @returns {Promise<{ name: string | null, ok: boolean }>}
    */
   async function resolvePlaceNameForDot(dot) {
-    try {
-      const res = await fetch(
-        `/api/geocode/reverse?lat=${encodeURIComponent(String(dot.lat))}&lng=${encodeURIComponent(String(dot.lng))}`
-      );
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) return null;
-      const results = Array.isArray(body.results) ? body.results : [];
-      for (const result of results) {
-        const name = specificPlaceName(result);
-        if (name) return name;
-      }
-      return specificPlaceName({
-        types: body.types,
-        formatted_address: body.formattedAddress,
-        address_components: body.addressComponents,
-      });
-    } catch {
-      return null;
+    const result = await fetchReverseGeocode(dot.lat, dot.lng);
+    if (!result.ok) return { name: null, ok: false };
+
+    for (const entry of result.results) {
+      const name = specificPlaceName(entry);
+      if (name) return { name, ok: true };
     }
+    return {
+      name: specificPlaceName({
+        types: result.types,
+        formatted_address: result.formattedAddress,
+        address_components: result.addressComponents,
+      }),
+      ok: true,
+    };
   }
 
   /**
@@ -298,7 +312,8 @@ export function createSelectionController() {
     if (typeof nextRegion === 'string' && nextRegion.trim()) {
       regionLabel = nextRegion.trim();
     } else if (!samePoint) {
-      regionLabel = await resolveRegionLabel(currentCenter);
+      const resolved = await resolveRegionLabel(currentCenter);
+      regionLabel = resolved.label;
     }
 
     overlay.setArea(currentCenter, currentRadiusMiles, { fit });
@@ -356,6 +371,11 @@ export function createSelectionController() {
     const radiusInput = byIdAs('input-radius');
     if (radiusInput) radiusInput.value = String(currentRadiusMiles);
 
+    const counterEl = byId('selection-counter');
+    if (counterEl) {
+      counterEl.textContent = `0 / ${runtimeConfig.defaults.maxSelections}`;
+    }
+
     updateMeta();
     updateSelectionUi();
   }
@@ -379,6 +399,7 @@ export function createSelectionController() {
     }
 
     setFieldError('candidates-error', '');
+    setStatusMessage('targeting-place-notice', '');
     targeting.clear();
     candidates = generateCandidateDots({
       center: currentCenter,
@@ -451,12 +472,20 @@ export function createSelectionController() {
     }
 
     setFieldError('candidates-error', '');
+    setStatusMessage('targeting-place-notice', '');
     const saveBtn = byIdAs('btn-save-targets');
-    if (saveBtn) saveBtn.disabled = true;
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Resolving names…';
+    }
+
+    let placeLookupFailed = false;
 
     try {
       if (!regionLabel || regionLabel === 'Region') {
-        regionLabel = await resolveRegionLabel(currentCenter);
+        const resolved = await resolveRegionLabel(currentCenter);
+        regionLabel = resolved.label;
+        if (!resolved.ok) placeLookupFailed = true;
       }
 
       const selected = candidates.filter((dot) => dot.selected);
@@ -464,7 +493,9 @@ export function createSelectionController() {
       const placeNamesByCandidateId = {};
       await Promise.all(
         selected.map(async (dot) => {
-          placeNamesByCandidateId[dot.id] = await resolvePlaceNameForDot(dot);
+          const resolved = await resolvePlaceNameForDot(dot);
+          placeNamesByCandidateId[dot.id] = resolved.name;
+          if (!resolved.ok) placeLookupFailed = true;
         })
       );
 
@@ -474,7 +505,15 @@ export function createSelectionController() {
           placeNamesByCandidateId,
         })
       );
+
+      if (placeLookupFailed) {
+        setStatusMessage(
+          'targeting-place-notice',
+          "Couldn't resolve place names; using defaults. You can edit names before download."
+        );
+      }
     } finally {
+      if (saveBtn) saveBtn.textContent = 'Save Targets';
       updateSelectionUi();
     }
   }

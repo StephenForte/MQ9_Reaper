@@ -11,6 +11,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const CONFIG_MD = path.join(__dirname, 'config', 'app-config.md');
 
 /**
+ * @param {string} field
+ * @param {string} detail
+ */
+function configError(field, detail) {
+  throw new Error(
+    `config: invalid "${field}" in config/app-config.md — ${detail}`
+  );
+}
+
+/**
  * Minimal frontmatter parser for flat `key: value` lines (no nested YAML).
  * @param {string} text
  * @returns {Record<string, string>}
@@ -18,7 +28,9 @@ export const CONFIG_MD = path.join(__dirname, 'config', 'app-config.md');
 export function parseFrontmatter(text) {
   const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) {
-    throw new Error(`Missing YAML frontmatter in ${CONFIG_MD}`);
+    throw new Error(
+      `Missing YAML frontmatter in config/app-config.md (expected a --- ... --- block at the top of the file)`
+    );
   }
 
   /** @type {Record<string, string>} */
@@ -37,56 +49,133 @@ export function parseFrontmatter(text) {
 
 /**
  * @param {Record<string, string>} raw
+ * @param {string} key
+ * @returns {string | undefined}
+ */
+function rawValue(raw, key) {
+  return Object.prototype.hasOwnProperty.call(raw, key) ? raw[key] : undefined;
+}
+
+/**
+ * @param {Record<string, string>} raw
+ * @param {string} key
+ * @returns {number}
+ */
+function requireNumber(raw, key) {
+  const value = rawValue(raw, key);
+  if (value === undefined || value === '') {
+    configError(key, 'missing; set a numeric value');
+  }
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    configError(key, `must be a number (got "${value}")`);
+  }
+  return n;
+}
+
+/**
+ * @param {Record<string, string>} raw
+ * @param {string} key
+ * @returns {number}
+ */
+function requireInteger(raw, key) {
+  const n = requireNumber(raw, key);
+  if (!Number.isInteger(n)) {
+    configError(key, `must be an integer (got "${raw[key]}")`);
+  }
+  return n;
+}
+
+/**
+ * @param {Record<string, string>} raw
  */
 export function toAppConfig(raw) {
-  const radiusMiles = Number(raw.radiusMiles);
-  const dotCount = Number(raw.dotCount);
-  // Prefer min/max; fall back to legacy requiredSelections as max.
-  const minSelections = Number(
-    raw.minSelections !== undefined ? raw.minSelections : '1'
-  );
-  const maxSelections = Number(
-    raw.maxSelections !== undefined
-      ? raw.maxSelections
-      : raw.requiredSelections !== undefined
-        ? raw.requiredSelections
-        : '12'
-  );
-  const defaultCenterLat = Number(raw.defaultCenterLat);
-  const defaultCenterLng = Number(raw.defaultCenterLng);
+  const radiusMiles = requireNumber(raw, 'radiusMiles');
+  const dotCount = requireInteger(raw, 'dotCount');
 
-  const minDotSpacingMeters = Number(raw.minDotSpacingMeters);
-  const mapType = raw.mapType === 'satellite' ? 'satellite' : 'hybrid';
-  const radiusUnit = raw.radiusUnit === 'km' ? 'km' : 'miles';
-  const confirmOnRecenter = raw.confirmOnRecenter !== 'false';
-  const seededRng = raw.seededRng === 'true';
+  const hasMin = rawValue(raw, 'minSelections') !== undefined;
+  const hasMax = rawValue(raw, 'maxSelections') !== undefined;
+  const hasLegacy = rawValue(raw, 'requiredSelections') !== undefined;
 
-  if (!Number.isFinite(radiusMiles) || radiusMiles <= 0) {
-    throw new Error('config: radiusMiles must be a number > 0');
+  const minSelections = hasMin
+    ? requireInteger(raw, 'minSelections')
+    : 1;
+  const maxSelections = hasMax
+    ? requireInteger(raw, 'maxSelections')
+    : hasLegacy
+      ? requireInteger(raw, 'requiredSelections')
+      : 12;
+
+  const minDotSpacingMeters = requireNumber(raw, 'minDotSpacingMeters');
+  const defaultCenterLat = requireNumber(raw, 'defaultCenterLat');
+  const defaultCenterLng = requireNumber(raw, 'defaultCenterLng');
+
+  const mapTypeRaw = rawValue(raw, 'mapType');
+  if (mapTypeRaw !== undefined && mapTypeRaw !== 'hybrid' && mapTypeRaw !== 'satellite') {
+    configError('mapType', 'must be "hybrid" or "satellite"');
   }
-  if (!Number.isInteger(dotCount) || dotCount < 2) {
-    throw new Error('config: dotCount must be an integer >= 2');
+  const mapType = mapTypeRaw === 'satellite' ? 'satellite' : 'hybrid';
+
+  const radiusUnitRaw = rawValue(raw, 'radiusUnit');
+  const radiusUnit = radiusUnitRaw === 'km' ? 'km' : 'miles';
+
+  const confirmRaw = rawValue(raw, 'confirmOnRecenter');
+  if (
+    confirmRaw !== undefined &&
+    confirmRaw !== 'true' &&
+    confirmRaw !== 'false'
+  ) {
+    configError('confirmOnRecenter', 'must be true or false');
   }
-  if (!Number.isInteger(minSelections) || minSelections < 1) {
-    throw new Error('config: minSelections must be an integer >= 1');
+  const confirmOnRecenter = confirmRaw !== 'false';
+
+  const seededRaw = rawValue(raw, 'seededRng');
+  if (seededRaw !== undefined && seededRaw !== 'true' && seededRaw !== 'false') {
+    configError('seededRng', 'must be true or false');
   }
-  if (!Number.isInteger(maxSelections) || maxSelections < 1) {
-    throw new Error('config: maxSelections must be an integer >= 1');
+  const seededRng = seededRaw === 'true';
+
+  const blockRaw = rawValue(raw, 'blockExtraSelections');
+  if (blockRaw !== undefined && blockRaw !== 'true' && blockRaw !== 'false') {
+    configError('blockExtraSelections', 'must be true or false');
+  }
+  const blockExtraSelections = blockRaw !== 'false';
+
+  if (!(radiusMiles > 0)) {
+    configError('radiusMiles', 'must be a number > 0');
+  }
+  if (dotCount < 2) {
+    configError('dotCount', 'must be an integer >= 2');
+  }
+  if (minSelections < 1) {
+    configError('minSelections', 'must be an integer >= 1');
+  }
+  if (maxSelections < 1) {
+    configError('maxSelections', 'must be an integer >= 1');
   }
   if (!(minSelections <= maxSelections)) {
-    throw new Error('config: minSelections must be <= maxSelections');
+    configError(
+      'minSelections',
+      `must be <= maxSelections (got ${minSelections} > ${maxSelections})`
+    );
   }
   if (!(maxSelections < dotCount)) {
-    throw new Error('config: maxSelections must be < dotCount');
+    configError(
+      'maxSelections',
+      `must be < dotCount (got ${maxSelections} >= ${dotCount})`
+    );
   }
-  if (!Number.isFinite(minDotSpacingMeters) || minDotSpacingMeters < 0) {
-    throw new Error('config: minDotSpacingMeters must be a number >= 0');
+  if (minDotSpacingMeters < 0) {
+    configError('minDotSpacingMeters', 'must be a number >= 0');
   }
-  if (!Number.isFinite(defaultCenterLat) || !Number.isFinite(defaultCenterLng)) {
-    throw new Error('config: defaultCenterLat/Lng must be numbers');
+  if (defaultCenterLat < -90 || defaultCenterLat > 90) {
+    configError('defaultCenterLat', 'must be between -90 and 90');
+  }
+  if (defaultCenterLng < -180 || defaultCenterLng > 180) {
+    configError('defaultCenterLng', 'must be between -180 and 180');
   }
   if (radiusUnit !== 'miles') {
-    throw new Error('config: radiusUnit must be "miles" in v1');
+    configError('radiusUnit', 'must be "miles" in v1');
   }
 
   return {
@@ -99,6 +188,7 @@ export function toAppConfig(raw) {
     radiusUnit,
     confirmOnRecenter,
     seededRng,
+    blockExtraSelections,
     defaultCenter: {
       lat: defaultCenterLat,
       lng: defaultCenterLng,
