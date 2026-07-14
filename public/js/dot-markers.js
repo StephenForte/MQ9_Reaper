@@ -14,10 +14,10 @@ const SELECTED = {
   r: 7,
 };
 
-/** Distinct from candidate dots — diamond for Review saved targets. */
+/** Distinct from candidate dots — gold diamond for Review saved targets. */
 const SAVED = {
-  fill: '#5b8def',
-  stroke: '#d6e4ff',
+  fill: '#d4a017',
+  stroke: '#f5e6c8',
   size: 18,
 };
 
