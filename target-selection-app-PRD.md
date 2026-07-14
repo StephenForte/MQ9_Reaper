@@ -328,8 +328,8 @@ Evergreen desktop browsers, latest two versions: Chrome, Edge, Firefox, Safari. 
 8. **Q9 — Seeded RNG.** → Unseeded; export `seed: null` (`seededRng: false`).
 9. **Q10 — Units.** → Miles only in v1 (`radiusUnit: miles`), configurable for a later unit expansion.
 10. **Q4 — Dot overlap.** → Close allowed; overlap not. Rejection sampling with `minDotSpacingMeters` (default 50).
-11. **P6 Admin auth.** → Simple shared `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars (Render + `.env`). No OAuth/SSO in v1.
-12. **P6 Admin UX.** → Third **Admin** tab (hidden when credentials unset). Login form → signed HttpOnly session cookie. Editable: radius, counts, block extras, spacing, map type, confirm-on-recenter, default center. Read-only in UI: `radiusUnit`, `seededRng`. Save writes `config/app-config.md`; **Apply & reload** required for the open browser. Disk persist across Render redeploys deferred to **P7**.
+11. **P6 Admin auth.** → Simple shared `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars (Render + `.env`). Password ≥12 chars or Admin stays disabled. Prefer `ADMIN_SESSION_SECRET` (≥16) for cookie HMAC. Timing-safe credential compare; 5 logins/min/IP; atomic MD writes; `trust proxy` for Secure cookies. No OAuth/SSO in v1.
+12. **P6 Admin UX.** → Third **Admin** tab (hidden when credentials unset/invalid). Login form → signed HttpOnly session cookie. Editable: radius, counts, block extras, spacing, map type, confirm-on-recenter, default center. Read-only in UI: `radiusUnit`, `seededRng`. Save writes `config/app-config.md`; **Apply & reload** required for the open browser. Disk persist across Render redeploys deferred to **P7**.
 13. **P7.** → Render persistent disk (investigate) so Admin MD writes survive redeploy.
 
 ---

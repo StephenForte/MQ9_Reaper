@@ -381,7 +381,28 @@ export function writeAppConfig(config, opts = {}) {
         ? fs.readFileSync(filePath, 'utf8')
         : '';
   const text = buildConfigMarkdown(config, existingText);
-  fs.writeFileSync(filePath, text, 'utf8');
+  const dir = path.dirname(filePath);
+  const tmp = path.join(
+    dir,
+    `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`
+  );
+  fs.writeFileSync(tmp, text, 'utf8');
+  try {
+    fs.renameSync(tmp, filePath);
+  } catch (err) {
+    // Windows cannot always rename over an existing file.
+    try {
+      fs.copyFileSync(tmp, filePath);
+      fs.unlinkSync(tmp);
+    } catch (cleanupErr) {
+      try {
+        fs.unlinkSync(tmp);
+      } catch {
+        /* ignore */
+      }
+      throw cleanupErr || err;
+    }
+  }
   return text;
 }
 
