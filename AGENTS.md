@@ -139,6 +139,7 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 11. P6 Admin auth = simple `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars.
 12. Default annotation on Save Targets: place/address name when reverse-geocode finds one, else `{Region} Target N`; confidence `1`; priority `medium`. Show a non-blocking notice if reverse geocode fails. File-level `title` and `category` are required on new exports.
 13. P6 Apply & reload after save; P7 Render persistent disk at `/var/data` with `CONFIG_PATH` / `TARGETS_PATH`, first-boot config seed from repo.
+14. New target JSON includes `schema: "game-target-1.0"` and `fictional: true` (fictional game packages). Legacy files without both keys still validate.
 
 ## Local checklist
 

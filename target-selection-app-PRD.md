@@ -105,7 +105,9 @@ A single operator working through a location-scoping or site-selection workflow 
 
 ```jsonc
 {
-  "version": "1.0",                 // string — schema version, for forward compat
+  "version": "1.0",                 // string — wire format version
+  "schema": "game-target-1.0",      // string — required on new exports; fictional game package tag
+  "fictional": true,                // boolean — required on new exports; must be true when present
   "createdAt": "ISO-8601 string",   // string — UTC timestamp of export
   "title": "string",                // non-empty — required on new exports; optional on legacy uploads
   "category": "string",             // non-empty free text — required on new exports; optional on legacy uploads
@@ -138,6 +140,8 @@ A single operator working through a location-scoping or site-selection workflow 
 ```json
 {
   "version": "1.0",
+  "schema": "game-target-1.0",
+  "fictional": true,
   "createdAt": "2026-07-11T18:42:05Z",
   "title": "Oakley scout shortlist",
   "category": "training",
@@ -173,6 +177,7 @@ A single operator working through a location-scoping or site-selection workflow 
 - `generation.requiredSelections` is the **count of targets in this file** (must equal `targets.length`). It is not a live App Config knob; runtime gating uses `minSelections` / `maxSelections` from §6.
 - `seed` is included for forward compatibility. v1 is unseeded and writes `null` (`seededRng: false`).
 - `title` and `category` are required on new builds/exports. Legacy files without both keys still validate; Review/Admin display defaults title to the filename or `"Untitled"` and category to `""`.
+- `schema: "game-target-1.0"` and `fictional: true` are stamped on all new exports and server creates (fictional game content marker). Legacy files without both keys still validate; if either key is present, both must be present with those exact values.
 - `id` uniqueness is only required within a single file. Custom Selection candidates use ids like `custom-1` in-session; export still assigns `t-NN` ids.
 - Upload to Reaper treats unknown keys as ignorable but hard-fails on missing/invalid required fields.
 

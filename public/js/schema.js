@@ -25,6 +25,8 @@ import { resolveTargetName } from './place-names.js';
 /**
  * @typedef {{
  *   version: string,
+ *   schema?: string,
+ *   fictional?: boolean,
  *   createdAt: string,
  *   title?: string,
  *   category?: string,
@@ -46,7 +48,21 @@ import { resolveTargetName } from './place-names.js';
  * }} TargetFile
  */
 
+/** Wire format version (forward compat). */
 export const SCHEMA_VERSION = '1.0';
+
+/**
+ * Product tag: fictional game-target package (guardrail / domain marker).
+ * Written on all new exports and server creates.
+ */
+export const GAME_SCHEMA_ID = 'game-target-1.0';
+
+/**
+ * @returns {{ schema: typeof GAME_SCHEMA_ID, fictional: true }}
+ */
+export function gameMetaFields() {
+  return { schema: GAME_SCHEMA_ID, fictional: true };
+}
 
 export const PRIORITIES = /** @type {const} */ ([
   'low',
@@ -280,6 +296,7 @@ export function buildTargetFile(input) {
   /** @type {TargetFile} */
   const document = {
     version: SCHEMA_VERSION,
+    ...gameMetaFields(),
     createdAt,
     title: meta.title,
     category: meta.category,
@@ -331,6 +348,29 @@ export function validateTargetFile(raw) {
       ok: false,
       message: `Unsupported version (expected "${SCHEMA_VERSION}").`,
     };
+  }
+
+  const hasSchema = Object.prototype.hasOwnProperty.call(doc, 'schema');
+  const hasFictional = Object.prototype.hasOwnProperty.call(doc, 'fictional');
+  /** @type {boolean} */
+  let gameMetaPresent = false;
+  if (hasSchema || hasFictional) {
+    if (!hasSchema || !hasFictional) {
+      return {
+        ok: false,
+        message: 'schema and fictional must both be present when either is set.',
+      };
+    }
+    if (doc.schema !== GAME_SCHEMA_ID) {
+      return {
+        ok: false,
+        message: `schema must be "${GAME_SCHEMA_ID}".`,
+      };
+    }
+    if (doc.fictional !== true) {
+      return { ok: false, message: 'fictional must be true.' };
+    }
+    gameMetaPresent = true;
   }
 
   if (typeof doc.createdAt !== 'string' || !doc.createdAt.trim()) {
@@ -484,6 +524,10 @@ export function validateTargetFile(raw) {
     },
     targets,
   };
+  if (gameMetaPresent) {
+    document.schema = GAME_SCHEMA_ID;
+    document.fictional = true;
+  }
   if (title !== undefined && category !== undefined) {
     document.title = title;
     document.category = category;
