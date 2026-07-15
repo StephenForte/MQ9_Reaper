@@ -26,6 +26,8 @@ import { resolveTargetName } from './place-names.js';
  * @typedef {{
  *   version: string,
  *   createdAt: string,
+ *   title?: string,
+ *   category?: string,
  *   center: { lat: number, lng: number, source: ExportCenterSource },
  *   radiusMiles: number,
  *   generation: {
@@ -188,6 +190,54 @@ export function validateTargetingRows(rows, limits) {
 }
 
 /**
+ * Validate file-level title + category (required on new exports).
+ * @param {{ title?: unknown, category?: unknown }} input
+ * @returns {{
+ *   ok: true,
+ *   title: string,
+ *   category: string,
+ * } | {
+ *   ok: false,
+ *   field: 'title' | 'category',
+ *   message: string,
+ * }}
+ */
+export function validateFileMeta(input) {
+  const title = typeof input.title === 'string' ? input.title.trim() : '';
+  const category =
+    typeof input.category === 'string' ? input.category.trim() : '';
+  if (!title) {
+    return { ok: false, field: 'title', message: 'Title is required.' };
+  }
+  if (!category) {
+    return { ok: false, field: 'category', message: 'Category is required.' };
+  }
+  return { ok: true, title, category };
+}
+
+/**
+ * Display defaults for legacy files missing title/category.
+ * @param {Pick<TargetFile, 'title' | 'category'> | Record<string, unknown>} doc
+ * @param {{ fallbackTitle?: string }} [opts]
+ * @returns {{ title: string, category: string }}
+ */
+export function normalizeTargetFileMeta(doc, opts = {}) {
+  const fallbackTitle =
+    typeof opts.fallbackTitle === 'string' && opts.fallbackTitle.trim()
+      ? opts.fallbackTitle.trim()
+      : 'Untitled';
+  const rawTitle = /** @type {{ title?: unknown }} */ (doc).title;
+  const rawCategory = /** @type {{ category?: unknown }} */ (doc).category;
+  const title =
+    typeof rawTitle === 'string' && rawTitle.trim()
+      ? rawTitle.trim()
+      : fallbackTitle;
+  const category =
+    typeof rawCategory === 'string' ? rawCategory.trim() : '';
+  return { title, category };
+}
+
+/**
  * @param {{
  *   center: LatLng,
  *   source: CenterSource,
@@ -197,11 +247,21 @@ export function validateTargetingRows(rows, limits) {
  *   maxSelections: number,
  *   seed?: number | null,
  *   rows: TargetingRow[],
+ *   title: string,
+ *   category: string,
  *   createdAt?: string,
  * }} input
  * @returns {{ ok: true, document: TargetFile } | { ok: false, message: string, rowIndex?: number, field?: string }}
  */
 export function buildTargetFile(input) {
+  const meta = validateFileMeta({
+    title: input.title,
+    category: input.category,
+  });
+  if (!meta.ok) {
+    return { ok: false, message: meta.message, field: meta.field };
+  }
+
   const validated = validateTargetingRows(input.rows, {
     minSelections: input.minSelections,
     maxSelections: input.maxSelections,
@@ -221,6 +281,8 @@ export function buildTargetFile(input) {
   const document = {
     version: SCHEMA_VERSION,
     createdAt,
+    title: meta.title,
+    category: meta.category,
     center: {
       lat: input.center.lat,
       lng: input.center.lng,
@@ -273,6 +335,29 @@ export function validateTargetFile(raw) {
 
   if (typeof doc.createdAt !== 'string' || !doc.createdAt.trim()) {
     return { ok: false, message: 'createdAt must be a non-empty string.' };
+  }
+
+  const hasTitle = Object.prototype.hasOwnProperty.call(doc, 'title');
+  const hasCategory = Object.prototype.hasOwnProperty.call(doc, 'category');
+  /** @type {string | undefined} */
+  let title;
+  /** @type {string | undefined} */
+  let category;
+  if (hasTitle || hasCategory) {
+    if (!hasTitle || !hasCategory) {
+      return {
+        ok: false,
+        message: 'title and category must both be present when either is set.',
+      };
+    }
+    if (typeof doc.title !== 'string' || !doc.title.trim()) {
+      return { ok: false, message: 'title must be a non-empty string.' };
+    }
+    if (typeof doc.category !== 'string' || !doc.category.trim()) {
+      return { ok: false, message: 'category must be a non-empty string.' };
+    }
+    title = doc.title.trim();
+    category = doc.category.trim();
   }
 
   const center = doc.center;
@@ -382,23 +467,30 @@ export function validateTargetFile(raw) {
     });
   }
 
+  /** @type {TargetFile} */
+  const document = {
+    version: SCHEMA_VERSION,
+    createdAt: /** @type {string} */ (doc.createdAt),
+    center: {
+      lat: /** @type {number} */ (c.lat),
+      lng: /** @type {number} */ (c.lng),
+      source: /** @type {ExportCenterSource} */ (c.source),
+    },
+    radiusMiles: /** @type {number} */ (doc.radiusMiles),
+    generation: {
+      dotCount: /** @type {number} */ (g.dotCount),
+      requiredSelections: required,
+      seed: /** @type {number | null} */ (g.seed),
+    },
+    targets,
+  };
+  if (title !== undefined && category !== undefined) {
+    document.title = title;
+    document.category = category;
+  }
+
   return {
     ok: true,
-    document: {
-      version: SCHEMA_VERSION,
-      createdAt: doc.createdAt,
-      center: {
-        lat: /** @type {number} */ (c.lat),
-        lng: /** @type {number} */ (c.lng),
-        source: /** @type {ExportCenterSource} */ (c.source),
-      },
-      radiusMiles: doc.radiusMiles,
-      generation: {
-        dotCount: /** @type {number} */ (g.dotCount),
-        requiredSelections: required,
-        seed: /** @type {number | null} */ (g.seed),
-      },
-      targets,
-    },
+    document,
   };
 }

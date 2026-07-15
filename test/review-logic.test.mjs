@@ -64,6 +64,8 @@ describe('parseTargetFileJson', () => {
       minSelections: 1,
       maxSelections: 12,
       seed: null,
+      title: 'Alpha package',
+      category: 'demo',
       createdAt: '2026-07-14T18:00:00.000Z',
       rows: [
         {
@@ -93,6 +95,8 @@ describe('parseTargetFileJson', () => {
     assert.equal(parsed.document.generation.requiredSelections, 2);
     assert.equal(parsed.document.targets.length, 2);
     assert.equal(parsed.document.center.source, 'click');
+    assert.equal(parsed.document.title, 'Alpha package');
+    assert.equal(parsed.document.category, 'demo');
   });
 
   it('surfaces expected targets length mismatches', () => {
@@ -142,12 +146,23 @@ describe('review display helpers', () => {
   });
 
   it('formats side-panel metadata from a loaded file', () => {
-    const meta = formatReviewMeta(validDoc(), 'demo-targets.json');
+    const meta = formatReviewMeta(
+      validDoc({ title: 'Scout', category: 'training' }),
+      'demo-targets.json'
+    );
     assert.equal(meta.filename, 'demo-targets.json');
+    assert.equal(meta.title, 'Scout');
+    assert.equal(meta.category, 'training');
     assert.equal(meta.createdAt, '2026-07-14T12:00:00Z');
     assert.equal(meta.center, '37.8000, -121.7000');
     assert.equal(meta.source, 'Address');
     assert.equal(meta.radius, '3 mi');
     assert.equal(meta.targetCount, '1');
+  });
+
+  it('defaults title/category for legacy files', () => {
+    const meta = formatReviewMeta(validDoc(), 'legacy.json');
+    assert.equal(meta.title, 'legacy.json');
+    assert.equal(meta.category, '—');
   });
 });

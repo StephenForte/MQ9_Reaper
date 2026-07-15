@@ -24,6 +24,7 @@ import { setFieldError } from './ui.js';
  * @returns {{
  *   attachMap: (map: google.maps.Map, config: AppConfig) => void,
  *   wireUpload: () => void,
+ *   refreshServerLibrary: () => Promise<void>,
  *   refit: () => void,
  *   hasDocument: () => boolean,
  * }}
@@ -52,11 +53,16 @@ export function createReviewController() {
       status: byId('review-status'),
       fileInput: byIdAs('input-review-file'),
       filename: byId('review-filename-label'),
+      title: byId('review-title-label'),
+      category: byId('review-category-label'),
       createdAt: byId('review-created-label'),
       center: byId('review-center-label'),
       source: byId('review-source-label'),
       radius: byId('review-radius-label'),
       targetCount: byId('review-count-label'),
+      serverList: byId('review-server-list'),
+      serverEmpty: byId('review-server-empty'),
+      refreshBtn: byIdAs('btn-review-refresh-server'),
     };
   }
 
@@ -149,6 +155,8 @@ export function createReviewController() {
 
     const meta = formatReviewMeta(loadedFile, loadedFilename);
     if (nodes.filename) nodes.filename.textContent = meta.filename;
+    if (nodes.title) nodes.title.textContent = meta.title;
+    if (nodes.category) nodes.category.textContent = meta.category;
     if (nodes.createdAt) nodes.createdAt.textContent = meta.createdAt;
     if (nodes.center) nodes.center.textContent = meta.center;
     if (nodes.source) nodes.source.textContent = meta.source;
@@ -280,6 +288,109 @@ export function createReviewController() {
   }
 
   /**
+   * @param {string} id
+   * @param {string} [label]
+   */
+  async function loadFromServer(id, label = '') {
+    setFieldError('review-error', '');
+    setFieldError('review-server-error', '');
+    const statusEl = byId('review-status');
+    if (statusEl) statusEl.textContent = 'Loading from server…';
+    try {
+      const res = await fetch(`/api/targets/${encodeURIComponent(id)}`);
+      /** @type {unknown} */
+      let body = null;
+      try {
+        body = await res.json();
+      } catch {
+        body = null;
+      }
+      if (!res.ok) {
+        const err =
+          body &&
+          typeof body === 'object' &&
+          typeof /** @type {{ error?: unknown }} */ (body).error === 'string'
+            ? /** @type {{ error: string }} */ (body).error
+            : 'Could not load that file from the server.';
+        setFieldError('review-error', err);
+        clearLoadedDocument();
+        return false;
+      }
+      return loadFromText(JSON.stringify(body), label || `${id}.json`);
+    } catch (err) {
+      console.error(err);
+      setFieldError('review-error', 'Could not reach the server library.');
+      clearLoadedDocument();
+      return false;
+    }
+  }
+
+  async function refreshServerLibrary() {
+    const { serverList, serverEmpty } = els();
+    setFieldError('review-server-error', '');
+    if (!serverList) return;
+
+    try {
+      const res = await fetch('/api/targets');
+      /** @type {{ targets?: Array<{ id: string, title: string, category: string, createdAt: string }> }} */
+      let body = {};
+      try {
+        body = await res.json();
+      } catch {
+        body = {};
+      }
+      if (!res.ok) {
+        setFieldError(
+          'review-server-error',
+          'Could not load the server library.'
+        );
+        return;
+      }
+
+      const targets = Array.isArray(body.targets) ? body.targets : [];
+      serverList.replaceChildren();
+      if (serverEmpty) serverEmpty.hidden = targets.length > 0;
+
+      for (const item of targets) {
+        const row = document.createElement('div');
+        row.className = 'review-server-row';
+        row.setAttribute('role', 'listitem');
+
+        const info = document.createElement('div');
+        info.className = 'review-server-info';
+
+        const title = document.createElement('span');
+        title.className = 'review-server-title';
+        title.textContent = item.title || 'Untitled';
+
+        const meta = document.createElement('span');
+        meta.className = 'review-server-meta';
+        const cat = item.category ? item.category : '—';
+        meta.textContent = `${cat} · ${item.createdAt || '—'}`;
+
+        info.append(title, meta);
+
+        const loadBtn = document.createElement('button');
+        loadBtn.type = 'button';
+        loadBtn.className = 'btn btn-quiet';
+        loadBtn.textContent = 'Load';
+        loadBtn.addEventListener('click', () => {
+          void loadFromServer(item.id, `${item.title || item.id}.json`);
+        });
+
+        row.append(info, loadBtn);
+        serverList.append(row);
+      }
+    } catch (err) {
+      console.error(err);
+      setFieldError(
+        'review-server-error',
+        'Could not load the server library.'
+      );
+    }
+  }
+
+  /**
    * @param {google.maps.Map} mapInstance
    * @param {AppConfig} _config
    */
@@ -300,7 +411,7 @@ export function createReviewController() {
   }
 
   function wireUpload() {
-    const { fileInput } = els();
+    const { fileInput, refreshBtn } = els();
     fileInput?.addEventListener('change', () => {
       const file = fileInput.files?.[0];
       if (!file) return;
@@ -309,7 +420,11 @@ export function createReviewController() {
         fileInput.value = '';
       });
     });
+    refreshBtn?.addEventListener('click', () => {
+      void refreshServerLibrary();
+    });
     updateMetaUi();
+    void refreshServerLibrary();
   }
 
   function refit() {
@@ -321,6 +436,7 @@ export function createReviewController() {
   return {
     attachMap,
     wireUpload,
+    refreshServerLibrary,
     refit,
     hasDocument: () => Boolean(loadedFile),
     /** @internal test hook */

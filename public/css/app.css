@@ -532,6 +532,14 @@ body {
   gap: 0.75rem;
 }
 
+.targeting-actions {
+  margin-top: 0.35rem;
+}
+
+.targeting-actions .btn {
+  flex: 1;
+}
+
 .targeting-row {
   display: grid;
   gap: 0.55rem;
@@ -899,6 +907,66 @@ body {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.65rem;
+}
+
+.review-server-list,
+.admin-targets-list {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+}
+
+.review-server-row,
+.admin-target-row {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.7rem;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.review-server-row {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.review-server-info,
+.admin-target-fields {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.review-server-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.review-server-meta {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.admin-target-row {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+}
+
+.admin-target-check {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 1.55rem;
+}
+
+.admin-target-fields {
+  grid-column: 2;
+  gap: 0.55rem;
+}
+
+.admin-target-row > .hint,
+.admin-target-row > .btn {
+  grid-column: 2;
 }
 
 .admin-toolbar .side-section-title {

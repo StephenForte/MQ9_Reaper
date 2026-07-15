@@ -222,8 +222,8 @@
                 <span class="step-num">4</span> Annotate &amp; download
               </h3>
               <p class="hint">
-                Name each row, set confidence (1–5) and priority, then Download
-                JSON.
+                Set a title and category, name each row, set confidence (1–5)
+                and priority, then Download JSON or Save to server.
               </p>
               <p
                 id="targeting-place-notice"
@@ -237,15 +237,47 @@
                 role="status"
                 hidden
               ></p>
+              <div class="field-row">
+                <label class="field">
+                  <span class="field-label">Title</span>
+                  <input
+                    id="input-target-title"
+                    name="targetTitle"
+                    type="text"
+                    autocomplete="off"
+                    maxlength="120"
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label">Category</span>
+                  <input
+                    id="input-target-category"
+                    name="targetCategory"
+                    type="text"
+                    autocomplete="off"
+                    maxlength="80"
+                  />
+                </label>
+              </div>
               <div id="targeting-list" class="targeting-list"></div>
-              <button
-                type="button"
-                class="btn btn-accent btn-block"
-                id="btn-download-json"
-                disabled
-              >
-                Download JSON
-              </button>
+              <div class="field-row targeting-actions">
+                <button
+                  type="button"
+                  class="btn btn-accent"
+                  id="btn-download-json"
+                  disabled
+                >
+                  Download JSON
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  id="btn-save-server"
+                  disabled
+                >
+                  Save to server
+                </button>
+              </div>
               <p id="targeting-error" class="field-error" role="alert" hidden></p>
               <p id="targeting-success" class="hint hint-success hint-tight" hidden></p>
             </section>
@@ -322,6 +354,45 @@
             </section>
 
             <section
+              class="side-section"
+              aria-labelledby="review-server-heading"
+            >
+              <div class="admin-toolbar">
+                <h3 id="review-server-heading" class="side-section-title">
+                  Saved on server
+                </h3>
+                <button
+                  type="button"
+                  class="btn btn-quiet"
+                  id="btn-review-refresh-server"
+                >
+                  Refresh
+                </button>
+              </div>
+              <p class="hint hint-tight">
+                Load a file previously saved from Target Selection.
+              </p>
+              <div
+                id="review-server-list"
+                class="review-server-list"
+                role="list"
+              ></div>
+              <p
+                id="review-server-empty"
+                class="hint hint-tight empty-state"
+                hidden
+              >
+                No saved files on the server yet.
+              </p>
+              <p
+                id="review-server-error"
+                class="field-error"
+                role="alert"
+                hidden
+              ></p>
+            </section>
+
+            <section
               id="section-review-meta"
               class="side-section"
               aria-labelledby="review-meta-heading"
@@ -334,6 +405,14 @@
                 <div>
                   <dt>File</dt>
                   <dd id="review-filename-label">—</dd>
+                </div>
+                <div>
+                  <dt>Title</dt>
+                  <dd id="review-title-label">—</dd>
+                </div>
+                <div>
+                  <dt>Category</dt>
+                  <dd id="review-category-label">—</dd>
                 </div>
                 <div>
                   <dt>Created</dt>
@@ -397,8 +476,9 @@
               <h2 class="side-title">Admin</h2>
               <p class="side-copy">
                 Tune runtime defaults (radius, counts, map type, selection
-                gating, spacing, confirm-on-recenter, default center). After
-                save, use Apply &amp; reload so this browser picks them up.
+                gating, spacing, confirm-on-recenter, default center). Manage
+                saved target JSON (title, category, delete). After config save,
+                use Apply &amp; reload so this browser picks them up.
               </p>
             </div>
 
@@ -614,6 +694,63 @@
                   hidden
                 ></p>
               </form>
+            </section>
+
+            <section
+              id="admin-targets-section"
+              class="side-section admin-card"
+              aria-labelledby="admin-targets-heading"
+              hidden
+            >
+              <div class="admin-toolbar">
+                <h3 id="admin-targets-heading" class="side-section-title">
+                  Saved target files
+                </h3>
+                <button
+                  type="button"
+                  class="btn btn-quiet"
+                  id="btn-admin-targets-refresh"
+                >
+                  Refresh
+                </button>
+              </div>
+              <p class="hint hint-tight">
+                Edit title or category, or delete one or more saved JSON files.
+              </p>
+              <div
+                id="admin-targets-list"
+                class="admin-targets-list"
+                role="list"
+              ></div>
+              <p
+                id="admin-targets-empty"
+                class="hint hint-tight empty-state"
+                hidden
+              >
+                No saved target files yet.
+              </p>
+              <div class="admin-actions">
+                <button
+                  type="button"
+                  class="btn"
+                  id="btn-admin-targets-delete"
+                  disabled
+                >
+                  Delete selected
+                </button>
+              </div>
+              <p
+                id="admin-targets-error"
+                class="field-error"
+                role="alert"
+                hidden
+              ></p>
+              <p
+                id="admin-targets-success"
+                class="hint hint-success hint-tight"
+                role="status"
+                hidden
+              ></p>
             </section>
           </aside>
         </section>

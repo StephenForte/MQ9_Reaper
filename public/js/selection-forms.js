@@ -19,6 +19,7 @@ import { setFieldError } from './ui.js';
  *   loadDots: () => Promise<boolean>,
  *   saveTargets: () => void | Promise<void>,
  *   downloadTargets: () => void,
+ *   saveTargetsToServer: () => void | Promise<void>,
  *   updateMeta: () => void,
  *   updateSelectionUi: () => void,
  * }} handlers
@@ -31,6 +32,7 @@ export function wireSelectionForms(handlers) {
   const loadDotsBtn = byIdAs('btn-load-dots');
   const saveBtn = byIdAs('btn-save-targets');
   const downloadBtn = byIdAs('btn-download-json');
+  const saveServerBtn = byIdAs('btn-save-server');
 
   addressForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -130,6 +132,11 @@ export function wireSelectionForms(handlers) {
   downloadBtn?.addEventListener('click', () => {
     if (downloadBtn.disabled) return;
     handlers.downloadTargets();
+  });
+
+  saveServerBtn?.addEventListener('click', () => {
+    if (saveServerBtn.disabled) return;
+    void handlers.saveTargetsToServer();
   });
 
   handlers.updateSelectionUi();
