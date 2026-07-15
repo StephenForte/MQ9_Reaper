@@ -14,6 +14,15 @@ const SELECTED = {
   r: 7,
 };
 
+/** Annotate-list focus: larger gold + halo so the active target reads on the map. */
+const ACTIVE = {
+  fill: '#dbb86a',
+  stroke: '#fff8e7',
+  r: 9,
+  ringR: 14,
+  ringStroke: 'rgba(219, 184, 106, 0.85)',
+};
+
 /** Distinct from candidate dots — gold diamond for Review saved targets. */
 const SAVED = {
   fill: '#d4a017',
@@ -22,13 +31,18 @@ const SAVED = {
 };
 
 /**
- * @param {{ fill: string, stroke: string, r: number }} style
+ * @param {{ fill: string, stroke: string, r: number, ringR?: number, ringStroke?: string }} style
  * @returns {string}
  */
 function circleSvgDataUrl(style) {
-  const size = style.r * 2 + 4;
+  const outer = style.ringR ?? style.r;
+  const size = outer * 2 + 4;
   const c = size / 2;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${c}" cy="${c}" r="${style.r}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="1.5"/></svg>`;
+  const ring =
+    style.ringR != null
+      ? `<circle cx="${c}" cy="${c}" r="${style.ringR}" fill="none" stroke="${style.ringStroke}" stroke-width="2"/>`
+      : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${ring}<circle cx="${c}" cy="${c}" r="${style.r}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="1.5"/></svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
@@ -46,6 +60,7 @@ function diamondSvgDataUrl(style) {
 
 const UNSELECTED_URL = circleSvgDataUrl(UNSELECTED);
 const SELECTED_URL = circleSvgDataUrl(SELECTED);
+const ACTIVE_URL = circleSvgDataUrl(ACTIVE);
 const SAVED_URL = diamondSvgDataUrl(SAVED);
 
 /** @returns {string} */
@@ -59,19 +74,28 @@ export function selectedDotIconUrl() {
 }
 
 /** @returns {string} */
+export function activeDotIconUrl() {
+  return ACTIVE_URL;
+}
+
+/** @returns {string} */
 export function savedTargetIconUrl() {
   return SAVED_URL;
 }
 
 /**
  * @param {boolean} selected
+ * @param {{ active?: boolean }} [opts]
  * @returns {google.maps.Icon}
  */
-export function iconForDot(selected) {
-  const style = selected ? SELECTED : UNSELECTED;
-  const size = style.r * 2 + 4;
+export function iconForDot(selected, opts = {}) {
+  const active = Boolean(opts.active) && selected;
+  const style = active ? ACTIVE : selected ? SELECTED : UNSELECTED;
+  const outer = style.ringR ?? style.r;
+  const size = outer * 2 + 4;
+  const url = active ? ACTIVE_URL : selected ? SELECTED_URL : UNSELECTED_URL;
   return {
-    url: selected ? SELECTED_URL : UNSELECTED_URL,
+    url,
     scaledSize: new google.maps.Size(size, size),
     anchor: new google.maps.Point(size / 2, size / 2),
   };

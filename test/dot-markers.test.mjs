@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  activeDotIconUrl,
   iconForDot,
   iconForSavedTarget,
   savedTargetIconUrl,
@@ -9,20 +10,27 @@ import {
 } from '../public/js/dot-markers.js';
 
 describe('dot marker SVG urls', () => {
-  it('exports distinct data-URL icons for selected / unselected / saved', () => {
+  it('exports distinct data-URL icons for selected / unselected / active / saved', () => {
     const unselected = unselectedDotIconUrl();
     const selected = selectedDotIconUrl();
+    const active = activeDotIconUrl();
     const saved = savedTargetIconUrl();
 
     assert.match(unselected, /^data:image\/svg\+xml/);
     assert.match(selected, /^data:image\/svg\+xml/);
+    assert.match(active, /^data:image\/svg\+xml/);
     assert.match(saved, /^data:image\/svg\+xml/);
     assert.notEqual(unselected, selected);
+    assert.notEqual(selected, active);
     assert.notEqual(selected, saved);
 
     const decodedSelected = decodeURIComponent(selected.split(',')[1]);
     assert.match(decodedSelected, /#c4a35a/);
     assert.match(decodedSelected, /<circle/);
+
+    const decodedActive = decodeURIComponent(active.split(',')[1]);
+    assert.match(decodedActive, /#dbb86a/);
+    assert.match(decodedActive, /rgba\(219, 184, 106/);
 
     const decodedSaved = decodeURIComponent(saved.split(',')[1]);
     assert.match(decodedSaved, /#d4a017/);
@@ -59,16 +67,22 @@ describe('iconForDot / iconForSavedTarget', () => {
 
     const off = iconForDot(false);
     const on = iconForDot(true);
+    const active = iconForDot(true, { active: true });
+    const activeIgnored = iconForDot(false, { active: true });
     const saved = iconForSavedTarget();
 
     assert.equal(off.url, unselectedDotIconUrl());
     assert.equal(on.url, selectedDotIconUrl());
+    assert.equal(active.url, activeDotIconUrl());
+    assert.equal(activeIgnored.url, unselectedDotIconUrl());
     assert.equal(saved.url, savedTargetIconUrl());
     assert.equal(off.scaledSize.width, 16);
     assert.equal(on.scaledSize.width, 18);
+    assert.equal(active.scaledSize.width, 32);
     assert.equal(saved.scaledSize.width, 18);
     assert.equal(off.anchor.x, 8);
     assert.equal(on.anchor.x, 9);
+    assert.equal(active.anchor.x, 16);
 
     // @ts-expect-error cleanup
     delete globalThis.google;

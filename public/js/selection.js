@@ -50,6 +50,8 @@ export function createSelectionController() {
   /** @type {Map<string, google.maps.Marker>} */
   const markersById = new Map();
   const targeting = createTargetingController();
+  /** @type {string | null} */
+  let activeAnnotateCandidateId = null;
   /** @type {string} */
   let regionLabel = 'Region';
 
@@ -157,6 +159,7 @@ export function createSelectionController() {
     }
     markersById.clear();
     candidates = [];
+    activeAnnotateCandidateId = null;
     targeting.clear();
     setStatusMessage('targeting-place-notice', '');
     updateSelectionUi();
@@ -168,8 +171,32 @@ export function createSelectionController() {
   function syncMarkerIcon(dot) {
     const marker = markersById.get(dot.id);
     if (!marker) return;
-    marker.setIcon(iconForDot(dot.selected));
-    marker.setZIndex(dot.selected ? 4 : 3);
+    const active = activeAnnotateCandidateId === dot.id;
+    marker.setIcon(iconForDot(dot.selected, { active }));
+    marker.setZIndex(active ? 6 : dot.selected ? 4 : 3);
+  }
+
+  /**
+   * Highlight the annotate-list's focused target on the map.
+   * @param {string | null} candidateId
+   */
+  function setActiveAnnotateCandidate(candidateId) {
+    const prevId = activeAnnotateCandidateId;
+    activeAnnotateCandidateId = candidateId;
+
+    if (prevId && prevId !== candidateId) {
+      const prev = candidates.find((dot) => dot.id === prevId);
+      if (prev) syncMarkerIcon(prev);
+    }
+
+    if (!candidateId) return;
+
+    const dot = candidates.find((d) => d.id === candidateId);
+    if (!dot) return;
+    syncMarkerIcon(dot);
+    if (map) {
+      map.panTo({ lat: dot.lat, lng: dot.lng });
+    }
   }
 
   /**
@@ -203,12 +230,13 @@ export function createSelectionController() {
    */
   function placeOneCandidateMarker(dot) {
     if (!map) return;
+    const active = activeAnnotateCandidateId === dot.id;
     const marker = new google.maps.Marker({
       map,
       position: { lat: dot.lat, lng: dot.lng },
       title: dot.id,
-      icon: iconForDot(dot.selected),
-      zIndex: dot.selected ? 4 : 3,
+      icon: iconForDot(dot.selected, { active }),
+      zIndex: active ? 6 : dot.selected ? 4 : 3,
       optimized: false,
     });
     marker.addListener('click', () => onDotClick(dot.id));
@@ -707,6 +735,7 @@ export function createSelectionController() {
   }
 
   function wireForms() {
+    targeting.setOnActiveCandidateChange(setActiveAnnotateCandidate);
     wireSelectionForms({
       setCenter,
       applyRadiusFromInput,

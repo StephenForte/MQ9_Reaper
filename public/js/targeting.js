@@ -24,6 +24,10 @@ export function createTargetingController() {
   let snapshotCandidateIds = [];
   let visible = false;
   let stale = false;
+  /** @type {number | null} */
+  let activeIndex = null;
+  /** @type {((candidateId: string | null) => void) | null} */
+  let onActiveCandidateChange = null;
 
   function els() {
     return {
@@ -68,6 +72,34 @@ export function createTargetingController() {
   }
 
   /**
+   * @param {number | null} index
+   * @param {{ pan?: boolean }} [opts]
+   */
+  function setActiveIndex(index, opts = {}) {
+    const next =
+      index != null && Number.isInteger(index) && index >= 0 && index < rows.length
+        ? index
+        : null;
+    const changed = next !== activeIndex;
+    activeIndex = next;
+
+    const { list } = els();
+    if (list) {
+      list.querySelectorAll('.targeting-row').forEach((article) => {
+        if (!(article instanceof HTMLElement)) return;
+        const i = Number(article.dataset.index);
+        article.classList.toggle('is-active', next != null && i === next);
+      });
+    }
+
+    if (!changed && !opts.pan) return;
+
+    const candidateId =
+      next != null ? rows[next]?.candidateId || null : null;
+    onActiveCandidateChange?.(candidateId);
+  }
+
+  /**
    * @param {TargetingRow} row
    * @param {number} index
    * @returns {HTMLElement}
@@ -76,6 +108,8 @@ export function createTargetingController() {
     const article = document.createElement('article');
     article.className = 'targeting-row';
     article.dataset.index = String(index);
+    if (row.candidateId) article.dataset.candidateId = row.candidateId;
+    if (activeIndex === index) article.classList.add('is-active');
 
     const heading = document.createElement('header');
     heading.className = 'targeting-row-header';
@@ -166,6 +200,13 @@ export function createTargetingController() {
     nameInput.addEventListener('input', onChange);
     confSelect.addEventListener('change', onChange);
     priSelect.addEventListener('change', onChange);
+
+    article.addEventListener('focusin', () => {
+      setActiveIndex(index, { pan: true });
+    });
+    article.addEventListener('pointerdown', () => {
+      setActiveIndex(index, { pan: true });
+    });
 
     article.append(heading, nameField, metaRow, rowError);
     return article;
@@ -330,6 +371,7 @@ export function createTargetingController() {
       .filter(Boolean);
     visible = true;
     stale = false;
+    setActiveIndex(null);
     setStaleMessage('');
     render();
 
@@ -342,6 +384,7 @@ export function createTargetingController() {
     snapshotCandidateIds = [];
     visible = false;
     stale = false;
+    setActiveIndex(null);
     setStaleMessage('');
     setFieldError('targeting-error', '');
     clearSuccess();
@@ -351,6 +394,13 @@ export function createTargetingController() {
     if (section) section.hidden = true;
     if (downloadBtn) downloadBtn.disabled = true;
     if (saveServerBtn) saveServerBtn.disabled = true;
+  }
+
+  /**
+   * @param {(candidateId: string | null) => void} handler
+   */
+  function setOnActiveCandidateChange(handler) {
+    onActiveCandidateChange = handler;
   }
 
   /**
@@ -472,9 +522,12 @@ export function createTargetingController() {
     clearSuccess,
     readFileMeta,
     setFileMeta,
+    setOnActiveCandidateChange,
     isVisible: () => visible,
     isStale: () => stale,
     getRows: () => rows.map((row) => ({ ...row })),
     getSnapshotCandidateIds: () => snapshotCandidateIds.slice(),
+    getActiveCandidateId: () =>
+      activeIndex != null ? rows[activeIndex]?.candidateId || null : null,
   };
 }
