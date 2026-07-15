@@ -948,6 +948,15 @@ body {
   color: var(--text-muted);
 }
 
+.review-server-meta--warn {
+  color: #e0b35a;
+}
+
+.review-server-row--invalid,
+.admin-target-row--invalid {
+  border-color: rgba(224, 179, 90, 0.45);
+}
+
 .admin-target-row {
   grid-template-columns: auto 1fr;
   align-items: start;

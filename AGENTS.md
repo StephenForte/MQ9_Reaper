@@ -105,7 +105,7 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 | `GET /api/config` | `{ mapsApiKey, adminConfigured, defaults }` — never geocoding key |
 | `GET /api/geocode?q=` | `{ lat, lng, formattedAddress, addressComponents, types }` or error JSON |
 | `GET /api/geocode/reverse?lat=&lng=` | Reverse geocode payload for region / place names |
-| `GET /api/targets` | `{ targets: [{ id, title, category, createdAt, filename }] }` (public) |
+| `GET /api/targets` | `{ targets: [{ id, title, category, createdAt, filename, invalid?, error? }] }` (public; corrupt/schema-invalid files are listed with `invalid: true` so Admin can delete them) |
 | `GET /api/targets/:id` | Full §4 target JSON (public) |
 | `POST /api/targets` | Persist validated target JSON; returns `{ ok, id, title, category, createdAt }` (public) |
 | `PATCH /api/targets/:id` | Update `title` / `category` (Admin) |
