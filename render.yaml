@@ -27,3 +27,5 @@ services:
         sync: false
       - key: ADMIN_SESSION_SECRET
         sync: false
+      - key: MCP_API_KEY
+        sync: false
