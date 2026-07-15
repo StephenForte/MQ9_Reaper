@@ -2,13 +2,14 @@
 
 Browser app for selecting and reviewing geographic points on a Google Maps hybrid view. Full product scope: `target-selection-app-PRD.md`. Agent/contributor contract: `AGENTS.md`.
 
-## Current phase: P7 — Persistent Admin config (v1 complete)
+## Current phase: P7 + saved target JSON on disk (v1 complete)
 
 - Render Blueprint uses **Starter** plan + a **1 GB persistent disk** mounted at `/var/data`
-- `CONFIG_PATH=/var/data/app-config.md` — Admin writes survive redeploy
+- `CONFIG_PATH=/var/data/app-config.md` — Admin config writes survive redeploy
+- `TARGETS_PATH=/var/data/targets` — optional Save to server / Review library / Admin manage
 - First boot copies repo `config/app-config.md` onto the disk if missing; later Admin edits own that file
-- `/api/health` includes `configPersistent` for deploy smoke checks
-- Locally, leave `CONFIG_PATH` unset to use the repo config file
+- `/api/health` includes `configPersistent` and `targetsPersistent` for deploy smoke checks
+- Locally, leave `CONFIG_PATH` / `TARGETS_PATH` unset to use the repo config file and `data/targets/`
 
 Earlier phases (P0–P6) remain in force: Selection + Review + Admin, §8.3 errors, key-restriction checklist.
 
@@ -39,6 +40,7 @@ cp .env.example .env
 | `ADMIN_PASSWORD` | ≥12 characters or Admin stays disabled |
 | `ADMIN_SESSION_SECRET` | ≥16 characters recommended; signs session cookies |
 | `CONFIG_PATH` | Optional absolute path to runtime config MD (Render sets this via Blueprint) |
+| `TARGETS_PATH` | Optional absolute directory for saved target JSON (Render sets `/var/data/targets`) |
 
 Then:
 
@@ -83,8 +85,9 @@ On desktop Chrome, Firefox, and Safari (latest):
 - [ ] Maps loads on Target Selection
 - [ ] Bad address → inline “Couldn't find that address”; map does not move
 - [ ] Invalid lat/long → inline field error
-- [ ] Load targets → select within min–max → Save Targets → Download JSON
-- [ ] Review: valid JSON renders; invalid JSON shows error and clears the map/list
+- [ ] Load targets → select within min–max → Save Targets → set title/category → Download JSON and/or Save to server
+- [ ] Review: valid JSON renders (file upload or server library); invalid JSON shows error and clears the map/list
+- [ ] Admin (when configured): edit saved file title/category; delete selected files
 - [ ] Maps key missing (temporarily) → blocking error overlay
 - [ ] With `ADMIN_*` set: Admin tab → login → save config → Apply & reload → Selection reflects new defaults
 

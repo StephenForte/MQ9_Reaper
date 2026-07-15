@@ -2,7 +2,7 @@
 
 ## Summary
 
-This is a two-tab browser app (plus an optional **Admin** tab when credentials are set) for selecting and reviewing geographic points of interest on a Google Maps **hybrid** view. In **Target Selection**, an operator pins a location (street address, map click, or lat/long), sets a radius (default 3 miles), clicks **Load targets** to scatter `dotCount` candidates (default 25) inside the circle, shortlists between `minSelections` and `maxSelections` (defaults 1–12), annotates them (name, confidence 1–5, priority), and downloads a JSON file. In **Upload to Reaper** (Review), the operator uploads that JSON and the app re-renders the same center, radius, and annotated points as gold diamond markers. v1 uses a thin Express backend to serve the app, proxy geocoding (forward + reverse), and optionally gate Admin config edits; there is no operator accounts system, no database, and no server-side storage of target files.
+This is a two-tab browser app (plus an optional **Admin** tab when credentials are set) for selecting and reviewing geographic points of interest on a Google Maps **hybrid** view. In **Target Selection**, an operator pins a location (street address, map click, or lat/long), sets a radius (default 3 miles), clicks **Load targets** to scatter `dotCount` candidates (default 25) inside the circle, shortlists between `minSelections` and `maxSelections` (defaults 1–12), annotates them (file title/category plus per-target name, confidence 1–5, priority), and downloads a JSON file and/or saves it to the Render persistent disk. In **Upload to Reaper** (Review), the operator uploads that JSON or loads one from the server library and the app re-renders the same center, radius, and annotated points as gold diamond markers. The Express backend serves the app, proxies geocoding (forward + reverse), stores optional target JSON on disk, and gates Admin config + target-file management; there is no operator accounts system and no database.
 
 ---
 
@@ -15,8 +15,8 @@ A browser-based tool for placing, annotating, and reviewing a shortlist of point
 A single operator working through a location-scoping or site-selection workflow who needs a repeatable way to (a) generate candidate points around an area of interest, (b) whittle them down to a shortlist with metadata, and (c) hand off or revisit that shortlist later as a file. *(Assumption: single-user, single-session workflow — no collaboration, sharing, or multi-user concurrency in v1.)*
 
 ### 1.3 What it is not (v1 scope guardrails)
-- No operator login for Selection / Upload to Reaper. *(Optional Admin tab uses shared `ADMIN_USERNAME` / `ADMIN_PASSWORD` — not a product accounts system.)*
-- No server-side storage or database of saved target files (see §7.4).
+- No operator login for Selection / Upload to Reaper. *(Optional Admin tab uses shared `ADMIN_USERNAME` / `ADMIN_PASSWORD` — not a product accounts system. Public save/list/load of target JSON does not require Admin; Admin is required to edit title/category or delete files.)*
+- No database of saved target files — optional JSON files on the Render persistent disk only (see §7.4).
 - No editing or re-export of a loaded file in Upload to Reaper — read-only display.
 - No routing, distance measurement, or analytics beyond what's described here.
 
@@ -41,9 +41,9 @@ A single operator working through a location-scoping or site-selection workflow 
 4. **AC-4 Dot generation:** Candidates are **not** auto-scattered. When a center and radius are set, the operator clicks **Load targets** (or **Reload targets**). The app then places `dotCount` dots at random positions uniformly within the radius circle (algorithm in §5.3), with `minDotSpacingMeters` rejection sampling.
 5. **AC-5 Selection:** The user can click a candidate to select it and click again to deselect. Selected candidates are visually distinct (e.g., color change). A live counter shows `selected / maxSelections`. Custom candidates from AC-1.2 count the same as generated dots.
 6. **AC-6 Save Targets gating:** **Save Targets** is enabled when the selected count is in `[minSelections, maxSelections]` (defaults 1–12). When `blockExtraSelections` is true (default), selecting above `maxSelections` is blocked; when false, extras may be selected but Save stays gated to the range.
-7. **AC-7 Targeting list:** On **Save Targets**, the selected dots populate a targeting list. Each row shows its lat/long (read-only) and editable fields: **name** (text), **confidence** (1–5), **priority** (low/medium/high/critical). Defaults: place/address name from reverse geocode when available, else `{Region} Target N`; confidence `1`; priority `medium`. A non-blocking notice appears if reverse geocode fails.
-8. **AC-8 Validation before export:** The final export is blocked until every row has a non-empty name, a confidence in 1–5, and a priority selected.
-9. **AC-9 Export:** On final download, the app writes a JSON file (schema in §4) and triggers a client-side download. Each target includes its lat/long. Export is a browser download, not a server upload (§7.4).
+7. **AC-7 Targeting list:** On **Save Targets**, the selected dots populate a targeting list. File-level **title** and **category** (required non-empty free text) sit above the rows. Each row shows its lat/long (read-only) and editable fields: **name** (text), **confidence** (1–5), **priority** (low/medium/high/critical). Defaults: place/address name from reverse geocode when available, else `{Region} Target N`; confidence `1`; priority `medium`. A non-blocking notice appears if reverse geocode fails.
+8. **AC-8 Validation before export:** The final export / server save is blocked until title and category are non-empty and every row has a non-empty name, a confidence in 1–5, and a priority selected.
+9. **AC-9 Export:** On final download, the app writes a JSON file (schema in §4) and triggers a client-side download. **Save to server** persists the same document under `TARGETS_PATH` (public). Each target includes its lat/long.
 
 ### 2.2 Tab 2 — Upload to Reaper (Review)
 
@@ -107,6 +107,8 @@ A single operator working through a location-scoping or site-selection workflow 
 {
   "version": "1.0",                 // string — schema version, for forward compat
   "createdAt": "ISO-8601 string",   // string — UTC timestamp of export
+  "title": "string",                // non-empty — required on new exports; optional on legacy uploads
+  "category": "string",             // non-empty free text — required on new exports; optional on legacy uploads
   "center": {
     "lat": "number",               // −90..90
     "lng": "number",               // −180..180
@@ -137,6 +139,8 @@ A single operator working through a location-scoping or site-selection workflow 
 {
   "version": "1.0",
   "createdAt": "2026-07-11T18:42:05Z",
+  "title": "Oakley scout shortlist",
+  "category": "training",
   "center": {
     "lat": 37.7996,
     "lng": -121.7124,
@@ -168,6 +172,7 @@ A single operator working through a location-scoping or site-selection workflow 
 **Notes**
 - `generation.requiredSelections` is the **count of targets in this file** (must equal `targets.length`). It is not a live App Config knob; runtime gating uses `minSelections` / `maxSelections` from §6.
 - `seed` is included for forward compatibility. v1 is unseeded and writes `null` (`seededRng: false`).
+- `title` and `category` are required on new builds/exports. Legacy files without both keys still validate; Review/Admin display defaults title to the filename or `"Untitled"` and category to `""`.
 - `id` uniqueness is only required within a single file. Custom Selection candidates use ids like `custom-1` in-session; export still assigns `t-NN` ids.
 - Upload to Reaper treats unknown keys as ignorable but hard-fails on missing/invalid required fields.
 
@@ -267,23 +272,24 @@ Legacy config key `requiredSelections` (if present alone) maps to `maxSelections
 ### 7.4 Where the JSON lives — client download vs. server storage
 | Option | Pros | Cons |
 |--------|------|------|
-| **Client download / upload (v1)** | No persistence layer, no DB, no operator auth; user owns the file. | User manages files manually; no in-app history. |
-| **Server-side storage** | Central file list / sharing later. | Needs storage + likely auth; Render disk is ephemeral without a persistent disk add-on. |
+| **Client download / upload** | No persistence layer, no DB, no operator auth; user owns the file. | User manages files manually. |
+| **Server-side disk (persistent)** | In-app library on Review; Admin can edit title/category or delete. | Needs Render persistent disk; public write surface (validated schema only). |
 
-**v1:** client download + upload only.
+**v1:** client download/upload **and** optional save/list/load on the Render persistent disk (`TARGETS_PATH`, default `/var/data/targets`). Admin session required to mutate metadata or delete.
 
 ### 7.5 Component sketch
 ```
 [ Browser ]
   ├─ Target Selection: center/radius forms, Maps JS (hybrid + circle + candidates),
-  │         selection, custom map-click targets, targeting list, JSON download
-  ├─ Upload to Reaper: file input, JSON validate, Maps JS + gold diamonds + info windows
-  ├─ Admin (optional): login + §6 editor → Apply & reload
-  └─ calls ──► /api/config, /api/geocode, /api/geocode/reverse, /api/admin/*
+  │         selection, custom map-click targets, targeting list, JSON download + Save to server
+  ├─ Upload to Reaper: file input + server library, JSON validate, Maps JS + gold diamonds + info windows
+  ├─ Admin (optional): login + §6 editor → Apply & reload; manage saved target JSON
+  └─ calls ──► /api/config, /api/geocode*, /api/targets*, /api/admin/*
 
 [ Render Web Service (Node/Express) ]
   ├─ serves public/
   ├─ config.js ←→ CONFIG_PATH or repo config/app-config.md (P7 disk at /var/data)
+  ├─ targets-store ←→ TARGETS_PATH or /var/data/targets
   ├─ /api/geocode* ──► Google Geocoding API
   └─ /api/admin/* (when ADMIN_* configured)
 ```
@@ -340,7 +346,7 @@ Evergreen desktop browsers, latest two versions: Chrome, Edge, Firefox, Safari. 
 ### Decided
 
 1. **Q1 — Backend or static?** → Render Web Service + geocode proxy.
-2. **Q2 — Storage in v1?** → Client download/upload only.
+2. **Q2 — Storage in v1?** → Client download/upload **plus** optional Render-disk save/list/load (`TARGETS_PATH`). Admin manages title/category/delete.
 3. **Q3 — Selection count semantics.** → Range: at least `minSelections`, at most `maxSelections` (defaults 1–12). Save enables when count is in range. `blockExtraSelections` (default `true`) blocks selecting above max; when `false`, extras are allowed but Save stays gated. Configurable in `config/app-config.md`; Admin UI in P6.
 4. **Q5 — Losing work on recenter.** → Yes, confirm when change would clear selection / regenerate via Reload (`confirmOnRecenter`). Targets load only via **Load targets** (no auto-scatter).
 5. **Q6 / config delivery.** → MD file (`config/app-config.md`); Admin in **P6**.
@@ -351,7 +357,7 @@ Evergreen desktop browsers, latest two versions: Chrome, Edge, Firefox, Safari. 
 10. **Q4 — Dot overlap.** → Close allowed; overlap not. Rejection sampling with `minDotSpacingMeters` (default 50).
 11. **P6 Admin auth.** → `ADMIN_USERNAME` / `ADMIN_PASSWORD` (password ≥12 or Admin disabled). Prefer `ADMIN_SESSION_SECRET` (≥16). Timing-safe compare; 5 logins/min/IP; atomic MD writes; `trust proxy`. No OAuth/SSO in v1.
 12. **P6 Admin UX.** → Third **Admin** tab (hidden when credentials unset/invalid). Editable: radius, counts, block extras, spacing, map type, confirm-on-recenter, default center. Read-only in UI: `radiusUnit`, `seededRng`. Save writes MD; **Apply & reload** required. Disk persist deferred to **P7**.
-13. **P7.** → Render Starter + persistent disk at `/var/data`; `CONFIG_PATH=/var/data/app-config.md`; first boot seeds from repo if missing; Admin edits survive redeploy.
+13. **P7.** → Render Starter + persistent disk at `/var/data`; `CONFIG_PATH=/var/data/app-config.md`; `TARGETS_PATH=/var/data/targets`; first boot seeds config from repo if missing; Admin edits and saved target JSON survive redeploy.
 14. **Annotation defaults.** → Place/address name from reverse geocode when found, else `{Region} Target N`; confidence `1`; priority `medium`; non-blocking notice on reverse-geocode failure.
 15. **Blank map click with candidates loaded.** → Three-way dialog: Add custom target, Recenter, or Keep current.
 

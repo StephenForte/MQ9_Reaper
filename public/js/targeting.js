@@ -1,5 +1,5 @@
 import { byId, byIdAs } from './dom.js';
-import { PRIORITIES, validateTargetingRow } from './schema.js';
+import { PRIORITIES, validateFileMeta, validateTargetingRow } from './schema.js';
 import { setFieldError } from './ui.js';
 
 /**
@@ -31,6 +31,9 @@ export function createTargetingController() {
       list: byId('targeting-list'),
       staleEl: byId('targeting-stale'),
       downloadBtn: byIdAs('btn-download-json'),
+      saveServerBtn: byIdAs('btn-save-server'),
+      titleInput: byIdAs('input-target-title'),
+      categoryInput: byIdAs('input-target-category'),
       successEl: byId('targeting-success'),
     };
   }
@@ -234,25 +237,74 @@ export function createTargetingController() {
   }
 
   function updateDownloadEnabled() {
-    const { downloadBtn } = els();
-    if (!downloadBtn) return;
+    const { downloadBtn, saveServerBtn } = els();
+    const buttons = [downloadBtn, saveServerBtn].filter(Boolean);
+    if (buttons.length === 0) return;
+
+    const disable = (title) => {
+      for (const btn of buttons) {
+        btn.disabled = true;
+        btn.title = title;
+      }
+    };
+
     if (!visible || stale || rows.length === 0) {
-      downloadBtn.disabled = true;
-      downloadBtn.title = stale
-        ? 'Selection changed — save targets again'
-        : 'Complete the targeting list first';
+      disable(
+        stale
+          ? 'Selection changed — save targets again'
+          : 'Complete the targeting list first'
+      );
       return;
     }
     syncAllFromDom();
-    const ready = rows.every((row) => validateTargetingRow(row).ok);
-    downloadBtn.disabled = !ready;
-    downloadBtn.title = ready
-      ? 'Download annotated targets as JSON'
-      : 'Fill name, confidence, and priority on every row';
+    const metaOk = validateFileMeta(readFileMeta()).ok;
+    const rowsOk = rows.every((row) => validateTargetingRow(row).ok);
+    const ready = metaOk && rowsOk;
+    for (const btn of buttons) {
+      btn.disabled = !ready;
+      btn.title = ready
+        ? ''
+        : !metaOk
+          ? 'Enter a title and category'
+          : 'Fill name, confidence, and priority on every row';
+    }
+  }
+
+  /**
+   * @returns {{ title: string, category: string }}
+   */
+  function readFileMeta() {
+    const { titleInput, categoryInput } = els();
+    return {
+      title: titleInput?.value || '',
+      category: categoryInput?.value || '',
+    };
+  }
+
+  /**
+   * @param {{ title?: string, category?: string }} [meta]
+   */
+  function setFileMeta(meta = {}) {
+    const { titleInput, categoryInput } = els();
+    if (titleInput && meta.title !== undefined) titleInput.value = meta.title;
+    if (categoryInput && meta.category !== undefined) {
+      categoryInput.value = meta.category;
+    }
+  }
+
+  function wireMetaFields() {
+    const { titleInput, categoryInput } = els();
+    const onMetaChange = () => {
+      setFieldError('targeting-error', '');
+      clearSuccess();
+      updateDownloadEnabled();
+    };
+    titleInput?.addEventListener('input', onMetaChange);
+    categoryInput?.addEventListener('input', onMetaChange);
   }
 
   function render() {
-    const { section, list, downloadBtn } = els();
+    const { section, list, downloadBtn, saveServerBtn } = els();
     if (!section || !list) return;
 
     list.replaceChildren();
@@ -262,6 +314,7 @@ export function createTargetingController() {
 
     section.hidden = !visible;
     if (downloadBtn) downloadBtn.disabled = true;
+    if (saveServerBtn) saveServerBtn.disabled = true;
     setFieldError('targeting-error', '');
     clearSuccess();
     updateDownloadEnabled();
@@ -292,10 +345,12 @@ export function createTargetingController() {
     setStaleMessage('');
     setFieldError('targeting-error', '');
     clearSuccess();
-    const { section, list, downloadBtn } = els();
+    setFileMeta({ title: '', category: '' });
+    const { section, list, downloadBtn, saveServerBtn } = els();
     if (list) list.replaceChildren();
     if (section) section.hidden = true;
     if (downloadBtn) downloadBtn.disabled = true;
+    if (saveServerBtn) saveServerBtn.disabled = true;
   }
 
   /**
@@ -335,6 +390,8 @@ export function createTargetingController() {
    * @returns {{
    *   ok: true,
    *   rows: TargetingRow[],
+   *   title: string,
+   *   category: string,
    * } | {
    *   ok: false,
    *   message: string,
@@ -359,6 +416,11 @@ export function createTargetingController() {
     list?.querySelectorAll('.targeting-row').forEach((article) => {
       if (article instanceof HTMLElement) clearRowError(article);
     });
+
+    const meta = validateFileMeta(readFileMeta());
+    if (!meta.ok) {
+      return { ok: false, message: meta.message, field: meta.field };
+    }
 
     if (
       rows.length < limits.minSelections ||
@@ -390,12 +452,16 @@ export function createTargetingController() {
 
     return {
       ok: true,
+      title: meta.title,
+      category: meta.category,
       rows: rows.map((row) => ({
         ...row,
         name: row.name.trim(),
       })),
     };
   }
+
+  wireMetaFields();
 
   return {
     openWithRows,
@@ -404,6 +470,8 @@ export function createTargetingController() {
     collectValidated,
     setSuccess,
     clearSuccess,
+    readFileMeta,
+    setFileMeta,
     isVisible: () => visible,
     isStale: () => stale,
     getRows: () => rows.map((row) => ({ ...row })),

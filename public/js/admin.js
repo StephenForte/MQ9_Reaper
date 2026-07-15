@@ -1,9 +1,10 @@
+import { confirmAction } from './confirm.js';
 import { byId, byIdAs } from './dom.js';
 import { setFieldError, setStatusMessage } from './ui.js';
 
 /**
- * Admin tab: login + edit §6 config. Save writes the active config file;
- * Apply & reload picks up new defaults in this browser.
+ * Admin tab: login + edit §6 config + manage saved target JSON files.
+ * Save writes the active config file; Apply & reload picks up new defaults.
  */
 
 /**
@@ -94,8 +95,10 @@ function readFormPatch() {
 function setGate(authenticated) {
   const login = byId('admin-login-section');
   const editor = byId('admin-editor-section');
+  const targets = byId('admin-targets-section');
   if (login) login.hidden = authenticated;
   if (editor) editor.hidden = !authenticated;
+  if (targets) targets.hidden = !authenticated;
 }
 
 export function createAdminController() {
@@ -111,6 +114,16 @@ export function createAdminController() {
         ? 'Reload the page to use the saved defaults'
         : 'Save config first';
     }
+  }
+
+  function updateDeleteButton() {
+    const btn = byIdAs('btn-admin-targets-delete');
+    const list = byId('admin-targets-list');
+    if (!btn || !list) return;
+    const checked = list.querySelectorAll(
+      'input[data-role="admin-target-check"]:checked'
+    );
+    btn.disabled = checked.length === 0;
   }
 
   /**
@@ -138,6 +151,7 @@ export function createAdminController() {
     setGate(authenticated);
     if (authenticated) {
       await loadConfigForm();
+      await loadTargetsList();
     }
   }
 
@@ -159,6 +173,181 @@ export function createAdminController() {
     if (body.defaults && typeof body.defaults === 'object') {
       fillForm(/** @type {Record<string, unknown>} */ (body.defaults));
     }
+  }
+
+  async function loadTargetsList() {
+    const list = byId('admin-targets-list');
+    const empty = byId('admin-targets-empty');
+    if (!list) return;
+    setFieldError('admin-targets-error', '');
+    setStatusMessage('admin-targets-success', '');
+
+    const { res, body } = await adminFetch('/api/targets');
+    if (res.status === 401) {
+      authenticated = false;
+      setGate(false);
+      return;
+    }
+    if (!res.ok) {
+      setFieldError(
+        'admin-targets-error',
+        typeof body.error === 'string'
+          ? body.error
+          : 'Could not load saved files.'
+      );
+      return;
+    }
+
+    const targets = Array.isArray(body.targets)
+      ? /** @type {Array<{ id: string, title: string, category: string, createdAt: string }>} */ (
+          body.targets
+        )
+      : [];
+    list.replaceChildren();
+    if (empty) empty.hidden = targets.length > 0;
+
+    for (const item of targets) {
+      const row = document.createElement('article');
+      row.className = 'admin-target-row';
+      row.dataset.id = item.id;
+      row.setAttribute('role', 'listitem');
+
+      const checkLabel = document.createElement('label');
+      checkLabel.className = 'admin-target-check';
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.dataset.role = 'admin-target-check';
+      check.value = item.id;
+      check.addEventListener('change', updateDeleteButton);
+      checkLabel.append(check);
+
+      const fields = document.createElement('div');
+      fields.className = 'admin-target-fields';
+
+      const titleField = document.createElement('label');
+      titleField.className = 'field';
+      const titleLabel = document.createElement('span');
+      titleLabel.className = 'field-label';
+      titleLabel.textContent = 'Title';
+      const titleInput = document.createElement('input');
+      titleInput.type = 'text';
+      titleInput.value = item.title || '';
+      titleInput.dataset.field = 'title';
+      titleInput.autocomplete = 'off';
+      titleField.append(titleLabel, titleInput);
+
+      const catField = document.createElement('label');
+      catField.className = 'field';
+      const catLabel = document.createElement('span');
+      catLabel.className = 'field-label';
+      catLabel.textContent = 'Category';
+      const catInput = document.createElement('input');
+      catInput.type = 'text';
+      catInput.value = item.category || '';
+      catInput.dataset.field = 'category';
+      catInput.autocomplete = 'off';
+      catField.append(catLabel, catInput);
+
+      fields.append(titleField, catField);
+
+      const meta = document.createElement('p');
+      meta.className = 'hint hint-tight';
+      meta.textContent = item.createdAt || '';
+
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'btn btn-quiet';
+      saveBtn.textContent = 'Save meta';
+      saveBtn.addEventListener('click', () => {
+        void saveTargetMeta(item.id, titleInput.value, catInput.value);
+      });
+
+      row.append(checkLabel, fields, meta, saveBtn);
+      list.append(row);
+    }
+
+    updateDeleteButton();
+  }
+
+  /**
+   * @param {string} id
+   * @param {string} title
+   * @param {string} category
+   */
+  async function saveTargetMeta(id, title, category) {
+    setFieldError('admin-targets-error', '');
+    setStatusMessage('admin-targets-success', '');
+    const { res, body } = await adminFetch(`/api/targets/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title, category }),
+    });
+    if (res.status === 401) {
+      authenticated = false;
+      setGate(false);
+      setFieldError('admin-login-error', 'Session expired. Log in again.');
+      return;
+    }
+    if (!res.ok) {
+      setFieldError(
+        'admin-targets-error',
+        typeof body.error === 'string'
+          ? body.error
+          : 'Could not update that file.'
+      );
+      return;
+    }
+    setStatusMessage('admin-targets-success', 'Title and category saved.');
+    await loadTargetsList();
+  }
+
+  async function deleteSelectedTargets() {
+    const list = byId('admin-targets-list');
+    if (!list) return;
+    const checked = [
+      ...list.querySelectorAll('input[data-role="admin-target-check"]:checked'),
+    ];
+    const ids = checked
+      .map((el) => (el instanceof HTMLInputElement ? el.value : ''))
+      .filter(Boolean);
+    if (ids.length === 0) return;
+
+    const ok = await confirmAction(
+      `Delete ${ids.length} saved target file${ids.length === 1 ? '' : 's'}? This cannot be undone.`,
+      {
+        title: 'Delete saved files',
+        confirmLabel: 'Delete',
+        cancelLabel: 'Cancel',
+      }
+    );
+    if (!ok) return;
+
+    setFieldError('admin-targets-error', '');
+    setStatusMessage('admin-targets-success', '');
+    const { res, body } = await adminFetch('/api/admin/targets/delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+    if (res.status === 401) {
+      authenticated = false;
+      setGate(false);
+      setFieldError('admin-login-error', 'Session expired. Log in again.');
+      return;
+    }
+    if (!res.ok) {
+      setFieldError(
+        'admin-targets-error',
+        typeof body.error === 'string'
+          ? body.error
+          : 'Could not delete selected files.'
+      );
+      return;
+    }
+    const deleted = Array.isArray(body.deleted) ? body.deleted.length : ids.length;
+    setStatusMessage(
+      'admin-targets-success',
+      `Deleted ${deleted} file${deleted === 1 ? '' : 's'}.`
+    );
+    await loadTargetsList();
   }
 
   function wireForms() {
@@ -192,7 +381,18 @@ export function createAdminController() {
       updateApplyUi();
     });
 
+    const refreshTargets = byIdAs('btn-admin-targets-refresh');
+    refreshTargets?.addEventListener('click', () => {
+      void loadTargetsList();
+    });
+
+    const deleteBtn = byIdAs('btn-admin-targets-delete');
+    deleteBtn?.addEventListener('click', () => {
+      void deleteSelectedTargets();
+    });
+
     updateApplyUi();
+    updateDeleteButton();
   }
 
   async function onLogin() {
@@ -223,6 +423,7 @@ export function createAdminController() {
       const pwd = byIdAs('admin-password');
       if (pwd) pwd.value = '';
       await loadConfigForm();
+      await loadTargetsList();
     } finally {
       if (btn) {
         btn.disabled = false;
@@ -238,6 +439,8 @@ export function createAdminController() {
     setGate(false);
     setStatusMessage('admin-success', '');
     setFieldError('admin-error', '');
+    setStatusMessage('admin-targets-success', '');
+    setFieldError('admin-targets-error', '');
     updateApplyUi();
   }
 

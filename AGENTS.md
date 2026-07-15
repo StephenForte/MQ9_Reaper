@@ -4,7 +4,7 @@ Guidance for humans and coding agents working in this repo. Product scope lives 
 
 ## Product in one line
 
-Two-tab browser app (plus optional **Admin** when credentials are set): **Target Selection** (center → radius → shortlist → annotate → download JSON) and **Review** (upload that JSON → re-render). No accounts, no DB, no server-side target storage in v1.
+Two-tab browser app (plus optional **Admin** when credentials are set): **Target Selection** (center → radius → shortlist → annotate → download JSON and/or save to server disk) and **Review** (upload that JSON or load from server → re-render). No accounts, no DB; optional target-JSON files on the Render persistent disk.
 
 ## Phase discipline
 
@@ -32,13 +32,14 @@ Exit criteria are in the PRD §9. Demo each phase before expanding scope. **P0�
   - `ADMIN_USERNAME` / `ADMIN_PASSWORD` — gate Admin tab + `/api/admin/*`. Password must be ≥12 chars. Both required or Admin stays hidden.
   - `ADMIN_SESSION_SECRET` — recommended (≥16 chars); signs Admin session cookies. If omitted, a password-derived key is used with a warning.
   - `CONFIG_PATH` — optional absolute path to the runtime config MD. Render Blueprint sets `/var/data/app-config.md` on the persistent disk.
+  - `TARGETS_PATH` — optional absolute directory for saved target JSON. Render Blueprint sets `/var/data/targets`. Locally defaults to `data/targets` (gitignored).
   - Never commit `.env`.
-- **Persistence:** Client download/upload of target JSON only. Config defaults: repo `config/app-config.md` is the seed; on Render, Admin writes the persistent-disk copy (`CONFIG_PATH` / `/var/data/app-config.md`). First boot seeds the disk from the repo file if missing.
+- **Persistence:** Client download/upload of target JSON remains. Operators can also **Save to server** (public `POST /api/targets`) onto the persistent disk; Review can list/load those files. Config defaults: repo `config/app-config.md` is the seed; on Render, Admin writes the persistent-disk copy (`CONFIG_PATH` / `/var/data/app-config.md`). First boot seeds the disk from the repo file if missing. Target files live under `TARGETS_PATH` (or `dirname(CONFIG_PATH)/targets`).
 - **Config defaults:** Edit `config/app-config.md` (YAML frontmatter) or use Admin. `config.js` loads/validates/serializes it (`bootstrapAppConfig` / `resolveConfigPath`). Keep invariant `minSelections ≤ maxSelections < dotCount`. Do not invent a second config store.
 - **Maps:** Default `mapType` is `hybrid`.
 - **Recenter:** When `confirmOnRecenter` is true and ≥1 candidate is selected, prompt before center/radius change or Reload targets.
-- **Targets (P2/P3):** Operator clicks **Load targets** (no auto-scatter). Use `public/js/dots.js` — uniform disk + `minDotSpacingMeters` rejection (close ok, overlap not). Center/radius change clears candidates until Load again. Selection requires `minSelections`–`maxSelections` (default 1–12). When `blockExtraSelections` is true (default), selecting above max is blocked; when false, extras are allowed but Save stays gated to the range.
-- **Admin (P6/P7):** Login form → HttpOnly session cookie (HMAC via `ADMIN_SESSION_SECRET` or password-derived fallback). Password ≥12 chars. Timing-safe credential compare; 5 logins/min/IP. Atomic MD writes. `trust proxy` for Secure cookies on Render. After save, **Apply & reload**. No OAuth. Render Blueprint: `plan: starter` + disk at `/var/data`.
+- **Targets (P2/P3):** Operator clicks **Load targets** (no auto-scatter). Use `public/js/dots.js` — uniform disk + `minDotSpacingMeters` rejection (close ok, overlap not). Center/radius change clears candidates until Load again. Selection requires `minSelections`–`maxSelections` (default 1–12). When `blockExtraSelections` is true (default), selecting above max is blocked; when false, extras are allowed but Save stays gated to the range. New exports require non-empty `title` and `category`; Download JSON and Save to server share the same gate.
+- **Admin (P6/P7):** Login form → HttpOnly session cookie (HMAC via `ADMIN_SESSION_SECRET` or password-derived fallback). Password ≥12 chars. Timing-safe credential compare; 5 logins/min/IP. Atomic MD writes. `trust proxy` for Secure cookies on Render. After save, **Apply & reload**. Admin can edit title/category or delete saved target JSON files. No OAuth. Render Blueprint: `plan: starter` + disk at `/var/data`.
 
 ## Repo layout
 
@@ -49,6 +50,8 @@ config/app-config.md      Repo seed + local runtime defaults
 lib/geocode.js            Geocoding proxy helper (server)
 lib/admin-session.js      Admin session cookie sign/verify + auth gates
 lib/login-rate-limit.js   In-memory Admin login rate limiter
+lib/targets-store.js      Saved target JSON on disk (list/read/write/meta/delete)
+data/targets/             Local default target-JSON dir (gitignored)
 public/
   index.html              Tab shell + forms (Selection / Review / Admin)
   css/app.css             App styles
@@ -92,16 +95,22 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 - **Validation:** Lat ∈ [−90, 90], lng ∈ [−180, 180]; radius `> 0`. JSON schema build/validate lives in `public/js/schema.js` (P3 export; P4 upload reuses it). Config validation lives in `config.js` (`toAppConfig` / `mergeAdminConfigPatch`).
 - **Modules:** Package is ESM (`"type": "module"`). Prefer small ES modules under `public/js/` over one growing `app.js`. Keep server routes thin; put Google/HTTP details in `lib/`.
 - **No drive-by refactors** outside the active phase. When touching structure for maintainability, keep behavior stable and phase-scoped.
-- **Do not** invent OAuth, analytics, routing tools, or server file libraries for target JSON.
+- **Do not** invent OAuth, analytics, or routing tools. Target JSON on disk goes through `lib/targets-store.js` only.
 
 ## API surface (v1)
 
 | Route | Returns |
 |-------|---------|
-| `GET /api/health` | `{ ok, mapsKeyConfigured, geocodingConfigured, adminConfigured, configPersistent }` (+ optional `geocodingProbe` when `?probe=geocode`) |
+| `GET /api/health` | `{ ok, mapsKeyConfigured, geocodingConfigured, adminConfigured, configPersistent, targetsPersistent }` (+ optional `geocodingProbe` when `?probe=geocode`) |
 | `GET /api/config` | `{ mapsApiKey, adminConfigured, defaults }` — never geocoding key |
 | `GET /api/geocode?q=` | `{ lat, lng, formattedAddress, addressComponents, types }` or error JSON |
 | `GET /api/geocode/reverse?lat=&lng=` | Reverse geocode payload for region / place names |
+| `GET /api/targets` | `{ targets: [{ id, title, category, createdAt, filename }] }` (public) |
+| `GET /api/targets/:id` | Full §4 target JSON (public) |
+| `POST /api/targets` | Persist validated target JSON; returns `{ ok, id, title, category, createdAt }` (public) |
+| `PATCH /api/targets/:id` | Update `title` / `category` (Admin) |
+| `DELETE /api/targets/:id` | Delete one file (Admin) |
+| `POST /api/admin/targets/delete` | `{ ids: string[] }` bulk delete (Admin) |
 | `POST /api/admin/login` | Session cookie on success (requires `ADMIN_*`) |
 | `POST /api/admin/logout` | Clears session cookie |
 | `GET /api/admin/session` | `{ adminConfigured, authenticated }` |
@@ -111,7 +120,7 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 ## Product decisions in force
 
 1. Render Web Service + geocode proxy (Q1).
-2. Client download/upload only (Q2).
+2. Client download/upload plus optional disk save/load on the Render persistent disk (Q2 amended).
 3. Selection count: at least `minSelections`, at most `maxSelections` (defaults 1–12). Selecting above max is blocked when `blockExtraSelections` is true (default).
 4. Dots may be close but must not overlap; `minDotSpacingMeters` (default 50) via rejection sampling (Q4).
 5. Confirm on recenter when ≥1 candidate is selected (`confirmOnRecenter`). Targets load only via **Load targets**.
@@ -121,8 +130,8 @@ Prefer small ES modules under `public/js/` over one growing `app.js`. Keep serve
 9. Unseeded RNG; export `seed: null` (Q9).
 10. Miles only in v1 (Q10).
 11. P6 Admin auth = simple `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars.
-12. Default annotation on Save Targets: place/address name when reverse-geocode finds one, else `{Region} Target N`; confidence `1`; priority `medium`. Show a non-blocking notice if reverse geocode fails.
-13. P6 Apply & reload after save; P7 Render persistent disk at `/var/data` with `CONFIG_PATH`, first-boot seed from repo.
+12. Default annotation on Save Targets: place/address name when reverse-geocode finds one, else `{Region} Target N`; confidence `1`; priority `medium`. Show a non-blocking notice if reverse geocode fails. File-level `title` and `category` are required on new exports.
+13. P6 Apply & reload after save; P7 Render persistent disk at `/var/data` with `CONFIG_PATH` / `TARGETS_PATH`, first-boot config seed from repo.
 
 ## Local checklist
 

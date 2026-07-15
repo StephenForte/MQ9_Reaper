@@ -26,6 +26,10 @@ import {
 } from './lib/admin-session.js';
 import { createLoginRateLimiter } from './lib/login-rate-limit.js';
 import { geocodeAddress, reverseGeocode } from './lib/geocode.js';
+import {
+  bootstrapTargetsStore,
+  isValidTargetId,
+} from './lib/targets-store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -43,6 +47,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  *   loginRateLimiter?: ReturnType<typeof createLoginRateLimiter>,
  *   geocodeFn?: typeof geocodeAddress,
  *   reverseGeocodeFn?: typeof reverseGeocode,
+ *   targetsStore?: ReturnType<typeof bootstrapTargetsStore>['store'],
+ *   targetsPath?: string,
+ *   targetsPersistent?: boolean,
  *   warn?: (message: string) => void,
  * }} [deps]
  */
@@ -71,6 +78,27 @@ export function createApp(deps = {}) {
   const reverseGeocodeFn = deps.reverseGeocodeFn || reverseGeocode;
   const warn = deps.warn || ((message) => console.warn(message));
 
+  const targetsBoot =
+    deps.targetsStore !== undefined
+      ? null
+      : bootstrapTargetsStore();
+  const targetsStore =
+    deps.targetsStore !== undefined
+      ? deps.targetsStore
+      : /** @type {NonNullable<typeof targetsBoot>} */ (targetsBoot).store;
+  const targetsPath =
+    deps.targetsPath !== undefined
+      ? deps.targetsPath
+      : targetsBoot
+        ? targetsBoot.path
+        : targetsStore.getPath();
+  const targetsPersistent =
+    deps.targetsPersistent !== undefined
+      ? deps.targetsPersistent
+      : targetsBoot
+        ? targetsBoot.persistent
+        : false;
+
   const adminAuth = resolveAdminAuth({
     username:
       deps.adminUsername !== undefined
@@ -98,6 +126,8 @@ export function createApp(deps = {}) {
   app.set('trust proxy', 1);
   app.use(express.json({ limit: '32kb' }));
   app.use(express.static(path.join(__dirname, 'public')));
+
+  const targetsJson = express.json({ limit: '256kb' });
 
   /**
    * @param {import('express').Request} req
@@ -145,6 +175,7 @@ export function createApp(deps = {}) {
       geocodingConfigured: Boolean(geocodingKey),
       adminConfigured,
       configPersistent,
+      targetsPersistent,
     };
 
     if (req.query.probe !== 'geocode') {
@@ -203,6 +234,86 @@ export function createApp(deps = {}) {
       adminConfigured,
       defaults: defaultsForClient(config),
     });
+  });
+
+  app.get('/api/targets', (_req, res) => {
+    try {
+      return res.json({ targets: targetsStore.list() });
+    } catch (err) {
+      console.error('List targets error:', err);
+      return res.status(503).json({ error: 'Could not list saved targets.' });
+    }
+  });
+
+  app.get('/api/targets/:id', (req, res) => {
+    const id = typeof req.params.id === 'string' ? req.params.id : '';
+    if (!isValidTargetId(id)) {
+      return res.status(400).json({ error: 'Invalid target id.' });
+    }
+    const result = targetsStore.read(id);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    return res.json(result.document);
+  });
+
+  app.post('/api/targets', targetsJson, (req, res) => {
+    const result = targetsStore.write(req.body);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    return res.status(201).json({
+      ok: true,
+      id: result.id,
+      title: result.title,
+      category: result.category,
+      createdAt: result.createdAt,
+    });
+  });
+
+  app.patch('/api/targets/:id', requireAdmin, targetsJson, (req, res) => {
+    const id = typeof req.params.id === 'string' ? req.params.id : '';
+    if (!isValidTargetId(id)) {
+      return res.status(400).json({ error: 'Invalid target id.' });
+    }
+    const result = targetsStore.updateMeta(id, {
+      title: req.body?.title,
+      category: req.body?.category,
+    });
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    return res.json({
+      ok: true,
+      id: result.id,
+      title: result.title,
+      category: result.category,
+      createdAt: result.createdAt,
+    });
+  });
+
+  app.delete('/api/targets/:id', requireAdmin, (req, res) => {
+    const id = typeof req.params.id === 'string' ? req.params.id : '';
+    if (!isValidTargetId(id)) {
+      return res.status(400).json({ error: 'Invalid target id.' });
+    }
+    const result = targetsStore.delete(id);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    return res.json({ ok: true });
+  });
+
+  app.post('/api/admin/targets/delete', requireAdmin, targetsJson, (req, res) => {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : null;
+    if (!ids) {
+      return res.status(400).json({ error: 'Pass a non-empty ids array.' });
+    }
+    const result = targetsStore.deleteMany(ids);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    return res.json({ ok: true, deleted: result.deleted });
   });
 
   app.post('/api/admin/login', (req, res) => {
@@ -383,13 +494,23 @@ const isMain =
 
 if (isMain) {
   const boot = bootstrapAppConfig();
+  const targetsBoot = bootstrapTargetsStore();
   const PORT = process.env.PORT || 3000;
-  const app = createApp();
+  const app = createApp({
+    targetsStore: targetsBoot.store,
+    targetsPath: targetsBoot.path,
+    targetsPersistent: targetsBoot.persistent,
+  });
   app.listen(PORT, () => {
     console.log(`MQ9 Reaper listening on http://localhost:${PORT}`);
     console.log(
       `Config: ${boot.path}${boot.seeded ? ' (seeded from repo)' : ''}${
         boot.persistent ? ' [persistent]' : ''
+      }`
+    );
+    console.log(
+      `Targets: ${targetsBoot.path}${
+        targetsBoot.persistent ? ' [persistent]' : ''
       }`
     );
     if (!process.env.GOOGLE_MAPS_API_KEY) {

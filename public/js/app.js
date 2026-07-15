@@ -105,6 +105,10 @@ function onTabActivate(tabName) {
 
   if (tabName !== 'select' && tabName !== 'review') return;
 
+  if (tabName === 'review') {
+    void review.refreshServerLibrary();
+  }
+
   const map = mapsByPanel.get(tabName);
   if (map && window.google?.maps) {
     requestAnimationFrame(() => {

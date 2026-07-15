@@ -603,6 +603,8 @@ export function createSelectionController() {
       minSelections: min,
       maxSelections: max,
       seed: null,
+      title: collected.title,
+      category: collected.category,
       rows: collected.rows,
     });
 
@@ -617,6 +619,93 @@ export function createSelectionController() {
     targeting.setSuccess(`Downloaded ${filename}`);
   }
 
+  async function saveTargetsToServer() {
+    if (!config || !currentCenter) return;
+    const { min, max } = selectionLimits();
+
+    const collected = targeting.collectValidated({
+      minSelections: min,
+      maxSelections: max,
+    });
+    if (!collected.ok) {
+      setFieldError('targeting-error', collected.message);
+      return;
+    }
+
+    const built = buildTargetFile({
+      center: currentCenter,
+      source: currentSource,
+      radiusMiles: currentRadiusMiles,
+      dotCount: config.defaults.dotCount,
+      minSelections: min,
+      maxSelections: max,
+      seed: null,
+      title: collected.title,
+      category: collected.category,
+      rows: collected.rows,
+    });
+
+    if (!built.ok) {
+      setFieldError('targeting-error', built.message);
+      return;
+    }
+
+    const saveBtn = byIdAs('btn-save-server');
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.setAttribute('aria-busy', 'true');
+      saveBtn.textContent = 'Saving…';
+    }
+    setFieldError('targeting-error', '');
+    targeting.clearSuccess();
+
+    try {
+      const res = await fetch('/api/targets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(built.document),
+      });
+      /** @type {Record<string, unknown>} */
+      let body = {};
+      try {
+        body = await res.json();
+      } catch {
+        body = {};
+      }
+      if (!res.ok) {
+        setFieldError(
+          'targeting-error',
+          typeof body.error === 'string'
+            ? body.error
+            : 'Could not save to the server.'
+        );
+        return;
+      }
+      const title =
+        typeof body.title === 'string' ? body.title : collected.title;
+      targeting.setSuccess(`Saved “${title}” to the server.`);
+    } catch (err) {
+      console.error(err);
+      setFieldError(
+        'targeting-error',
+        'Could not reach the server. Try Download JSON or retry.'
+      );
+    } finally {
+      if (saveBtn) {
+        saveBtn.textContent = 'Save to server';
+        saveBtn.removeAttribute('aria-busy');
+      }
+      // Re-enable based on form readiness (saveBtn was force-disabled).
+      const recheck = targeting.collectValidated({
+        minSelections: min,
+        maxSelections: max,
+      });
+      if (saveBtn) saveBtn.disabled = !recheck.ok;
+      const downloadBtn = byIdAs('btn-download-json');
+      if (downloadBtn) downloadBtn.disabled = !recheck.ok;
+    }
+  }
+
   function wireForms() {
     wireSelectionForms({
       setCenter,
@@ -624,6 +713,7 @@ export function createSelectionController() {
       loadDots,
       saveTargets,
       downloadTargets,
+      saveTargetsToServer,
       updateMeta,
       updateSelectionUi,
     });

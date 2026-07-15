@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, it } from 'node:test';
 import { createApp } from '../server.js';
+import { createTargetsStore } from '../lib/targets-store.js';
 
 /**
  * @param {import('express').Express} app
@@ -34,23 +38,40 @@ const stubConfig = {
   defaultCenter: { lat: 37.8, lng: -121.7 },
 };
 
+function ephemeralTargets() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mq9-api-'));
+  return {
+    dir,
+    store: createTargetsStore(dir),
+  };
+}
+
 describe('/api/health', () => {
   it('reports key configuration without probing by default', async () => {
-    const app = createApp({
-      mapsKey: 'maps',
-      geocodingKey: '',
-      config: stubConfig,
-      adminUsername: '',
-      adminPassword: '',
-    });
-    const { status, body } = await getJson(app, '/api/health');
-    assert.equal(status, 200);
-    assert.equal(body.ok, true);
-    assert.equal(body.mapsKeyConfigured, true);
-    assert.equal(body.geocodingConfigured, false);
-    assert.equal(body.adminConfigured, false);
-    assert.equal(typeof body.configPersistent, 'boolean');
-    assert.equal(body.geocodingProbe, undefined);
+    const { dir, store } = ephemeralTargets();
+    try {
+      const app = createApp({
+        mapsKey: 'maps',
+        geocodingKey: '',
+        config: stubConfig,
+        adminUsername: '',
+        adminPassword: '',
+        targetsStore: store,
+        targetsPath: dir,
+        targetsPersistent: false,
+      });
+      const { status, body } = await getJson(app, '/api/health');
+      assert.equal(status, 200);
+      assert.equal(body.ok, true);
+      assert.equal(body.mapsKeyConfigured, true);
+      assert.equal(body.geocodingConfigured, false);
+      assert.equal(body.adminConfigured, false);
+      assert.equal(typeof body.configPersistent, 'boolean');
+      assert.equal(body.targetsPersistent, false);
+      assert.equal(body.geocodingProbe, undefined);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('probes geocoding when ?probe=geocode', async () => {

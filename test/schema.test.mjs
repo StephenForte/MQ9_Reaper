@@ -4,8 +4,10 @@ import {
   SCHEMA_VERSION,
   buildTargetFile,
   exportCenterSource,
+  normalizeTargetFileMeta,
   rowsFromSelectedDots,
   targetIdAt,
+  validateFileMeta,
   validateTargetFile,
   validateTargetingRow,
   validateTargetingRows,
@@ -163,6 +165,25 @@ describe('validateTargetingRow / validateTargetingRows', () => {
   });
 });
 
+describe('validateFileMeta / normalizeTargetFileMeta', () => {
+  it('requires non-empty trimmed title and category', () => {
+    assert.equal(validateFileMeta({ title: 'Scout', category: 'training' }).ok, true);
+    assert.equal(validateFileMeta({ title: '  ', category: 'training' }).ok, false);
+    assert.equal(validateFileMeta({ title: 'Scout', category: '' }).ok, false);
+  });
+
+  it('defaults legacy display meta', () => {
+    assert.deepEqual(normalizeTargetFileMeta({}, { fallbackTitle: 'demo.json' }), {
+      title: 'demo.json',
+      category: '',
+    });
+    assert.deepEqual(
+      normalizeTargetFileMeta({ title: ' A ', category: ' ops ' }),
+      { title: 'A', category: 'ops' }
+    );
+  });
+});
+
 describe('buildTargetFile', () => {
   it('builds a schema-valid document with seed null and actual count', () => {
     const rows = [
@@ -183,6 +204,8 @@ describe('buildTargetFile', () => {
       dotCount: 25,
       minSelections: 1,
       maxSelections: 12,
+      title: 'Oakley shortlist',
+      category: 'training',
       rows,
       createdAt: '2026-07-13T18:00:00.000Z',
     });
@@ -191,6 +214,8 @@ describe('buildTargetFile', () => {
     if (!built.ok) return;
 
     assert.equal(built.document.version, SCHEMA_VERSION);
+    assert.equal(built.document.title, 'Oakley shortlist');
+    assert.equal(built.document.category, 'training');
     assert.equal(built.document.center.source, 'latlng');
     assert.equal(built.document.generation.seed, null);
     assert.equal(built.document.generation.requiredSelections, 2);
@@ -208,14 +233,52 @@ describe('buildTargetFile', () => {
       dotCount: 25,
       minSelections: 1,
       maxSelections: 12,
+      title: 'X',
+      category: 'Y',
       rows: [completeRow({ name: '' })],
     });
     assert.equal(built.ok, false);
+  });
+
+  it('requires title and category on new builds', () => {
+    const built = buildTargetFile({
+      center: { lat: 37.0, lng: -121.0 },
+      source: 'click',
+      radiusMiles: 3,
+      dotCount: 25,
+      minSelections: 1,
+      maxSelections: 12,
+      title: '',
+      category: 'training',
+      rows: [completeRow()],
+    });
+    assert.equal(built.ok, false);
+    assert.match(built.message || '', /Title/);
   });
 });
 
 describe('validateTargetFile', () => {
   const valid = {
+    version: '1.0',
+    createdAt: '2026-07-13T18:00:00Z',
+    title: 'Scout package',
+    category: 'ops',
+    center: { lat: 37.8, lng: -121.7, source: 'address' },
+    radiusMiles: 3,
+    generation: { dotCount: 25, requiredSelections: 1, seed: null },
+    targets: [
+      {
+        id: 't-01',
+        name: 'Marker',
+        lat: 37.81,
+        lng: -121.71,
+        confidence: 3,
+        priority: 'medium',
+      },
+    ],
+  };
+
+  const legacy = {
     version: '1.0',
     createdAt: '2026-07-13T18:00:00Z',
     center: { lat: 37.8, lng: -121.7, source: 'address' },
@@ -236,6 +299,28 @@ describe('validateTargetFile', () => {
   it('accepts a minimal valid file and ignores unknown keys', () => {
     const result = validateTargetFile({ ...valid, extra: true });
     assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.document.title, 'Scout package');
+    assert.equal(result.document.category, 'ops');
+  });
+
+  it('accepts legacy files without title/category', () => {
+    const result = validateTargetFile(legacy);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.document.title, undefined);
+    assert.equal(result.document.category, undefined);
+  });
+
+  it('rejects empty title/category when present and one-sided meta', () => {
+    assert.equal(
+      validateTargetFile({ ...valid, title: '  ' }).ok,
+      false
+    );
+    assert.equal(
+      validateTargetFile({ ...legacy, title: 'Only title' }).ok,
+      false
+    );
   });
 
   it('rejects wrong targets length with operator-friendly message', () => {

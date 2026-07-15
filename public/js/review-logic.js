@@ -3,7 +3,7 @@
  */
 
 import { labelForCenterSource } from './selection-logic.js';
-import { validateTargetFile } from './schema.js';
+import { normalizeTargetFileMeta, validateTargetFile } from './schema.js';
 
 /** @typedef {import('./schema.js').TargetFile} TargetFile */
 
@@ -60,6 +60,8 @@ export function targetInfoLines(target) {
  * @param {string} [filename]
  * @returns {{
  *   filename: string,
+ *   title: string,
+ *   category: string,
  *   createdAt: string,
  *   center: string,
  *   source: string,
@@ -68,8 +70,11 @@ export function targetInfoLines(target) {
  * }}
  */
 export function formatReviewMeta(doc, filename = '') {
+  const meta = normalizeTargetFileMeta(doc, { fallbackTitle: filename || 'Untitled' });
   return {
     filename: filename || '—',
+    title: meta.title,
+    category: meta.category || '—',
     createdAt: doc.createdAt || '—',
     center: `${doc.center.lat.toFixed(4)}, ${doc.center.lng.toFixed(4)}`,
     source: labelForCenterSource(doc.center.source),
