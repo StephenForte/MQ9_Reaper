@@ -252,4 +252,27 @@ describe('/api/targets', () => {
     const bad = await requestJson(app, '/api/targets/not-a-uuid');
     assert.equal(bad.status, 400);
   });
+
+  it('lists and deletes corrupt on-disk files via Admin', async () => {
+    const { app, dir } = targetsApp();
+    const corruptId = '33333333-3333-4333-8333-333333333333';
+    fs.writeFileSync(path.join(dir, `${corruptId}.json`), 'not-json', 'utf8');
+
+    const listed = await requestJson(app, '/api/targets');
+    assert.equal(listed.status, 200);
+    assert.equal(listed.body.targets.length, 1);
+    assert.equal(listed.body.targets[0].id, corruptId);
+    assert.equal(listed.body.targets[0].invalid, true);
+
+    const cookie = await loginCookie(app);
+    const deleted = await requestJson(app, `/api/targets/${corruptId}`, {
+      method: 'DELETE',
+      headers: { Cookie: cookie },
+    });
+    assert.equal(deleted.status, 200);
+    assert.equal(deleted.body.ok, true);
+
+    const after = await requestJson(app, '/api/targets');
+    assert.equal(after.body.targets.length, 0);
+  });
 });

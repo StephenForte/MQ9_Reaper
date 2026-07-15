@@ -332,7 +332,7 @@ export function createReviewController() {
 
     try {
       const res = await fetch('/api/targets');
-      /** @type {{ targets?: Array<{ id: string, title: string, category: string, createdAt: string }> }} */
+      /** @type {{ targets?: Array<{ id: string, title: string, category: string, createdAt: string, invalid?: boolean, error?: string }> }} */
       let body = {};
       try {
         body = await res.json();
@@ -353,7 +353,9 @@ export function createReviewController() {
 
       for (const item of targets) {
         const row = document.createElement('div');
-        row.className = 'review-server-row';
+        row.className = item.invalid
+          ? 'review-server-row review-server-row--invalid'
+          : 'review-server-row';
         row.setAttribute('role', 'listitem');
 
         const info = document.createElement('div');
@@ -364,19 +366,31 @@ export function createReviewController() {
         title.textContent = item.title || 'Untitled';
 
         const meta = document.createElement('span');
-        meta.className = 'review-server-meta';
-        const cat = item.category ? item.category : '—';
-        meta.textContent = `${cat} · ${item.createdAt || '—'}`;
+        meta.className = item.invalid
+          ? 'review-server-meta review-server-meta--warn'
+          : 'review-server-meta';
+        if (item.invalid) {
+          meta.textContent =
+            item.error || 'Corrupt or schema-invalid — delete from Admin.';
+        } else {
+          const cat = item.category ? item.category : '—';
+          meta.textContent = `${cat} · ${item.createdAt || '—'}`;
+        }
 
         info.append(title, meta);
 
         const loadBtn = document.createElement('button');
         loadBtn.type = 'button';
         loadBtn.className = 'btn btn-quiet';
-        loadBtn.textContent = 'Load';
-        loadBtn.addEventListener('click', () => {
-          void loadFromServer(item.id, `${item.title || item.id}.json`);
-        });
+        if (item.invalid) {
+          loadBtn.textContent = 'Unavailable';
+          loadBtn.disabled = true;
+        } else {
+          loadBtn.textContent = 'Load';
+          loadBtn.addEventListener('click', () => {
+            void loadFromServer(item.id, `${item.title || item.id}.json`);
+          });
+        }
 
         row.append(info, loadBtn);
         serverList.append(row);

@@ -199,7 +199,7 @@ export function createAdminController() {
     }
 
     const targets = Array.isArray(body.targets)
-      ? /** @type {Array<{ id: string, title: string, category: string, createdAt: string }>} */ (
+      ? /** @type {Array<{ id: string, title: string, category: string, createdAt: string, invalid?: boolean, error?: string }>} */ (
           body.targets
         )
       : [];
@@ -208,7 +208,9 @@ export function createAdminController() {
 
     for (const item of targets) {
       const row = document.createElement('article');
-      row.className = 'admin-target-row';
+      row.className = item.invalid
+        ? 'admin-target-row admin-target-row--invalid'
+        : 'admin-target-row';
       row.dataset.id = item.id;
       row.setAttribute('role', 'listitem');
 
@@ -234,6 +236,7 @@ export function createAdminController() {
       titleInput.value = item.title || '';
       titleInput.dataset.field = 'title';
       titleInput.autocomplete = 'off';
+      titleInput.disabled = Boolean(item.invalid);
       titleField.append(titleLabel, titleInput);
 
       const catField = document.createElement('label');
@@ -246,21 +249,27 @@ export function createAdminController() {
       catInput.value = item.category || '';
       catInput.dataset.field = 'category';
       catInput.autocomplete = 'off';
+      catInput.disabled = Boolean(item.invalid);
       catField.append(catLabel, catInput);
 
       fields.append(titleField, catField);
 
       const meta = document.createElement('p');
-      meta.className = 'hint hint-tight';
-      meta.textContent = item.createdAt || '';
+      meta.className = item.invalid ? 'hint hint-tight hint-warn' : 'hint hint-tight';
+      meta.textContent = item.invalid
+        ? item.error || 'File is corrupt or schema-invalid. Delete it from Admin.'
+        : item.createdAt || '';
 
       const saveBtn = document.createElement('button');
       saveBtn.type = 'button';
       saveBtn.className = 'btn btn-quiet';
       saveBtn.textContent = 'Save meta';
-      saveBtn.addEventListener('click', () => {
-        void saveTargetMeta(item.id, titleInput.value, catInput.value);
-      });
+      saveBtn.disabled = Boolean(item.invalid);
+      if (!item.invalid) {
+        saveBtn.addEventListener('click', () => {
+          void saveTargetMeta(item.id, titleInput.value, catInput.value);
+        });
+      }
 
       row.append(checkLabel, fields, meta, saveBtn);
       list.append(row);
