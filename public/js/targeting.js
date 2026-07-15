@@ -407,7 +407,7 @@ export function createTargetingController() {
       return {
         ok: false,
         message:
-          'Selection changed. Click Save Targets again before downloading.',
+          'Selection changed. Click Save Targets again before downloading or saving to the server.',
       };
     }
 
