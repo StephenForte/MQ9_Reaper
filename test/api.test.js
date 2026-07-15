@@ -66,6 +66,7 @@ describe('/api/health', () => {
       assert.equal(body.mapsKeyConfigured, true);
       assert.equal(body.geocodingConfigured, false);
       assert.equal(body.adminConfigured, false);
+      assert.equal(body.mcpConfigured, false);
       assert.equal(typeof body.configPersistent, 'boolean');
       assert.equal(body.targetsPersistent, false);
       assert.equal(body.geocodingProbe, undefined);

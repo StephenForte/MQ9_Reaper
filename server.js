@@ -30,6 +30,8 @@ import {
   bootstrapTargetsStore,
   isValidTargetId,
 } from './lib/targets-store.js';
+import { MCP_API_KEY_MIN_LENGTH, resolveMcpAuth } from './lib/mcp/auth.js';
+import { mountMcpRoutes } from './lib/mcp/http.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -50,6 +52,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  *   targetsStore?: ReturnType<typeof bootstrapTargetsStore>['store'],
  *   targetsPath?: string,
  *   targetsPersistent?: boolean,
+ *   mcpApiKey?: string,
  *   warn?: (message: string) => void,
  * }} [deps]
  */
@@ -121,21 +124,35 @@ export function createApp(deps = {}) {
   const loginRateLimiter =
     deps.loginRateLimiter || createLoginRateLimiter({ limit: 5, windowMs: 60_000 });
 
+  const mcpAuth = resolveMcpAuth({
+    apiKey:
+      deps.mcpApiKey !== undefined
+        ? deps.mcpApiKey
+        : process.env.MCP_API_KEY || '',
+    warn,
+  });
+  const mcpConfigured = mcpAuth.configured;
+
   const app = express();
   // Render (and most PaaS) terminate TLS upstream — needed for Secure cookies + req.ip.
   app.set('trust proxy', 1);
 
   const defaultJson = express.json({ limit: '32kb' });
   const targetsJson = express.json({ limit: '256kb' });
-  // Skip the default parser for POST /api/targets so the 256kb route parser can apply.
+  // Skip the default parser for POST /api/targets and /mcp so the 256kb route parsers can apply.
   // Otherwise global express.json rejects 32–256kb bodies with 413 before the route runs.
   app.use((req, res, next) => {
-    if (req.method === 'POST' && req.path === '/api/targets') {
+    if (
+      req.method === 'POST' &&
+      (req.path === '/api/targets' || req.path === '/mcp')
+    ) {
       return next();
     }
     return defaultJson(req, res, next);
   });
   app.use(express.static(path.join(__dirname, 'public')));
+
+  mountMcpRoutes(app, { targetsStore, mcpAuth });
 
   /**
    * @param {import('express').Request} req
@@ -182,6 +199,7 @@ export function createApp(deps = {}) {
       mapsKeyConfigured: Boolean(mapsKey),
       geocodingConfigured: Boolean(geocodingKey),
       adminConfigured,
+      mcpConfigured,
       configPersistent,
       targetsPersistent,
     };
@@ -545,6 +563,19 @@ if (isMain) {
       console.warn(
         'Warning: ADMIN_SESSION_SECRET not set — using a password-derived signing key. Set ADMIN_SESSION_SECRET in production.'
       );
+    }
+    if (!process.env.MCP_API_KEY) {
+      console.warn(
+        'Warning: MCP_API_KEY not set — remote MCP at /mcp stays disabled (503).'
+      );
+    } else if (
+      (process.env.MCP_API_KEY || '').trim().length < MCP_API_KEY_MIN_LENGTH
+    ) {
+      console.warn(
+        `Warning: MCP_API_KEY must be at least ${MCP_API_KEY_MIN_LENGTH} characters — MCP stays disabled.`
+      );
+    } else {
+      console.log('MCP: /mcp enabled (Bearer MCP_API_KEY)');
     }
   });
 }
