@@ -182,6 +182,35 @@ describe('mcp auth helpers', () => {
     assert.equal(ok.configured, true);
   });
 
+  it('resolveMcpAuth rejects non-https public URLs (except localhost)', () => {
+    const key = 'a'.repeat(MCP_API_KEY_MIN_LENGTH);
+    const oauth = {
+      apiKey: key,
+      oauthClientId: '11111111-1111-4111-8111-111111111111',
+      oauthClientSecret: 'oauth-client-secret-16+',
+      warn: () => {},
+    };
+    assert.equal(
+      resolveMcpAuth({ ...oauth, publicUrl: 'http://example.com' })
+        .oauthConfigured,
+      false
+    );
+    assert.equal(
+      resolveMcpAuth({ ...oauth, publicUrl: 'not a url' }).oauthConfigured,
+      false
+    );
+    assert.equal(
+      resolveMcpAuth({ ...oauth, publicUrl: 'https://example.com' })
+        .oauthConfigured,
+      true
+    );
+    assert.equal(
+      resolveMcpAuth({ ...oauth, publicUrl: 'http://127.0.0.1:3000' })
+        .oauthConfigured,
+      true
+    );
+  });
+
   it('bearerMatches is timing-safe and case-insensitive on scheme', () => {
     assert.equal(bearerMatches(`Bearer ${MCP_KEY}`, MCP_KEY), true);
     assert.equal(bearerMatches(`bearer ${MCP_KEY}`, MCP_KEY), true);

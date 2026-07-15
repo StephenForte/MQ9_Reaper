@@ -32,7 +32,6 @@ import {
 } from './lib/targets-store.js';
 import {
   MCP_API_KEY_MIN_LENGTH,
-  MCP_OAUTH_SECRET_MIN_LENGTH,
   resolveMcpAuth,
   resolveMcpPublicUrl,
 } from './lib/mcp/auth.js';
@@ -586,36 +585,34 @@ if (isMain) {
         'Warning: ADMIN_SESSION_SECRET not set — using a password-derived signing key. Set ADMIN_SESSION_SECRET in production.'
       );
     }
-    if (!process.env.MCP_API_KEY) {
-      console.warn(
-        'Warning: MCP_API_KEY not set — remote MCP at /mcp stays disabled (503).'
-      );
-    } else if (
-      (process.env.MCP_API_KEY || '').trim().length < MCP_API_KEY_MIN_LENGTH
-    ) {
-      console.warn(
-        `Warning: MCP_API_KEY must be at least ${MCP_API_KEY_MIN_LENGTH} characters — MCP stays disabled.`
-      );
-    } else {
-      console.log('MCP: /mcp enabled (Bearer MCP_API_KEY)');
-      if (!process.env.MCP_OAUTH_CLIENT_ID || !process.env.MCP_OAUTH_CLIENT_SECRET) {
+    // Same checks as createApp → resolveMcpAuth (incl. https/localhost public URL).
+    // Suppress warn here — createApp already emitted any MCP auth warnings.
+    const mcpBootAuth = resolveMcpAuth({
+      apiKey: process.env.MCP_API_KEY || '',
+      oauthClientId: process.env.MCP_OAUTH_CLIENT_ID || '',
+      oauthClientSecret: process.env.MCP_OAUTH_CLIENT_SECRET || '',
+      publicUrl: resolveMcpPublicUrl(),
+      warn: () => {},
+    });
+    if (!mcpBootAuth.configured) {
+      if (!process.env.MCP_API_KEY) {
         console.warn(
-          'Warning: MCP_OAUTH_CLIENT_ID / MCP_OAUTH_CLIENT_SECRET not set — Claude OAuth connector stays disabled (Cursor Bearer still works).'
-        );
-      } else if (
-        (process.env.MCP_OAUTH_CLIENT_SECRET || '').trim().length <
-        MCP_OAUTH_SECRET_MIN_LENGTH
-      ) {
-        console.warn(
-          `Warning: MCP_OAUTH_CLIENT_SECRET must be at least ${MCP_OAUTH_SECRET_MIN_LENGTH} characters — OAuth stays disabled.`
-        );
-      } else if (!resolveMcpPublicUrl()) {
-        console.warn(
-          'Warning: MCP_PUBLIC_URL (or RENDER_EXTERNAL_URL) not set — OAuth discovery metadata unavailable.'
+          'Warning: MCP_API_KEY not set — remote MCP at /mcp stays disabled (503).'
         );
       } else {
+        console.warn(
+          `Warning: MCP_API_KEY must be at least ${MCP_API_KEY_MIN_LENGTH} characters — MCP stays disabled.`
+        );
+      }
+    } else {
+      console.log('MCP: /mcp enabled (Bearer MCP_API_KEY)');
+      if (mcpBootAuth.oauthConfigured) {
         console.log(
-          `MCP OAuth: enabled for Claude (issuer ${resolveMcpPublicUrl()})`
+          `MCP OAuth: enabled for Claude (issuer ${mcpBootAuth.publicUrl})`
+        );
+      } else if (mcpBootAuth.oauthReason) {
+        console.warn(
+          `Warning: ${mcpBootAuth.oauthReason} — Claude OAuth connector stays disabled (Cursor Bearer still works).`
         );
       }
     }
