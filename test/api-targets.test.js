@@ -274,6 +274,27 @@ describe('/api/targets', () => {
     assert.equal(listed.body.targets.length, 0);
   });
 
+  it('bulk delete rejects invalid ids without removing valid files', async () => {
+    const { app } = targetsApp();
+    const a = await requestJson(app, '/api/targets', {
+      method: 'POST',
+      body: sampleDoc({ title: 'Keep me' }),
+    });
+    const cookie = await loginCookie(app);
+
+    const bulk = await requestJson(app, '/api/admin/targets/delete', {
+      method: 'POST',
+      body: { ids: [a.body.id, 'not-a-uuid'] },
+      headers: { Cookie: cookie },
+    });
+    assert.equal(bulk.status, 400);
+    assert.match(String(bulk.body.error), /invalid target id/i);
+
+    const listed = await requestJson(app, '/api/targets');
+    assert.equal(listed.body.targets.length, 1);
+    assert.equal(listed.body.targets[0].id, a.body.id);
+  });
+
   it('rejects invalid ids', async () => {
     const { app } = targetsApp();
     const bad = await requestJson(app, '/api/targets/not-a-uuid');

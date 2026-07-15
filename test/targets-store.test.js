@@ -149,4 +149,20 @@ describe('createTargetsStore', () => {
     assert.deepEqual(result.deleted.sort(), [a.id, b.id].sort());
     assert.equal(store.list().length, 0);
   });
+
+  it('rejects invalid ids before deleting any files', () => {
+    const dir = makeTmpDir();
+    const store = createTargetsStore(dir);
+    const a = store.write(sampleDoc({ title: 'Keep me' }));
+    assert.equal(a.ok, true);
+    if (!a.ok) return;
+
+    const result = store.deleteMany([a.id, 'not-a-uuid']);
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.status, 400);
+    assert.equal(result.error, 'Invalid target id.');
+    assert.equal(store.list().length, 1);
+    assert.equal(store.list()[0].id, a.id);
+  });
 });
