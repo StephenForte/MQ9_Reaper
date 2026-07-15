@@ -149,4 +149,42 @@ describe('createTargetsStore', () => {
     assert.deepEqual(result.deleted.sort(), [a.id, b.id].sort());
     assert.equal(store.list().length, 0);
   });
+
+  it('lists corrupt and schema-invalid files so they can be deleted', () => {
+    const dir = makeTmpDir();
+    const store = createTargetsStore(dir);
+    const valid = store.write(sampleDoc({ title: 'Good' }));
+    assert.equal(valid.ok, true);
+    if (!valid.ok) return;
+
+    const corruptId = '11111111-1111-4111-8111-111111111111';
+    const invalidId = '22222222-2222-4222-8222-222222222222';
+    fs.writeFileSync(path.join(dir, `${corruptId}.json`), '{not-json', 'utf8');
+    fs.writeFileSync(
+      path.join(dir, `${invalidId}.json`),
+      `${JSON.stringify({
+        version: '1.0',
+        createdAt: '2026-07-14T09:00:00.000Z',
+        title: 'Broken schema',
+        category: 'ops',
+      })}\n`,
+      'utf8'
+    );
+
+    const listed = store.list();
+    assert.equal(listed.length, 3);
+    const byId = Object.fromEntries(listed.map((item) => [item.id, item]));
+    assert.equal(byId[valid.id].invalid, undefined);
+    assert.equal(byId[corruptId].invalid, true);
+    assert.match(byId[corruptId].error || '', /not valid JSON/i);
+    assert.equal(byId[invalidId].invalid, true);
+    assert.equal(byId[invalidId].title, 'Broken schema');
+    assert.equal(byId[invalidId].category, 'ops');
+    assert.match(byId[invalidId].error || '', /schema validation/i);
+
+    assert.equal(store.delete(corruptId).ok, true);
+    assert.equal(store.delete(invalidId).ok, true);
+    assert.equal(store.list().length, 1);
+    assert.equal(store.list()[0].id, valid.id);
+  });
 });
