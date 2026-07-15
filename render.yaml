@@ -29,3 +29,9 @@ services:
         sync: false
       - key: MCP_API_KEY
         sync: false
+      - key: MCP_OAUTH_CLIENT_ID
+        sync: false
+      - key: MCP_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: MCP_PUBLIC_URL
+        sync: false
