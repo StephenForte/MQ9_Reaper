@@ -124,10 +124,18 @@ export function createApp(deps = {}) {
   const app = express();
   // Render (and most PaaS) terminate TLS upstream — needed for Secure cookies + req.ip.
   app.set('trust proxy', 1);
-  app.use(express.json({ limit: '32kb' }));
-  app.use(express.static(path.join(__dirname, 'public')));
 
+  const defaultJson = express.json({ limit: '32kb' });
   const targetsJson = express.json({ limit: '256kb' });
+  // Skip the default parser for POST /api/targets so the 256kb route parser can apply.
+  // Otherwise global express.json rejects 32–256kb bodies with 413 before the route runs.
+  app.use((req, res, next) => {
+    if (req.method === 'POST' && req.path === '/api/targets') {
+      return next();
+    }
+    return defaultJson(req, res, next);
+  });
+  app.use(express.static(path.join(__dirname, 'public')));
 
   /**
    * @param {import('express').Request} req

@@ -183,6 +183,33 @@ describe('/api/targets', () => {
     assert.match(bad.body.error || '', /title|createdAt|version/i);
   });
 
+  it('accepts target payloads between 32kb and 256kb', async () => {
+    const { app } = targetsApp();
+    const pad = 'x'.repeat(40 * 1024);
+    const doc = sampleDoc({
+      targets: [
+        {
+          id: 't-01',
+          name: `Marker ${pad}`,
+          lat: 37.81,
+          lng: -121.71,
+          confidence: 3,
+          priority: 'medium',
+        },
+      ],
+    });
+    const serialized = JSON.stringify(doc);
+    assert.ok(serialized.length > 32 * 1024);
+    assert.ok(serialized.length < 256 * 1024);
+
+    const created = await requestJson(app, '/api/targets', {
+      method: 'POST',
+      body: doc,
+    });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.ok, true);
+  });
+
   it('requires Admin for PATCH and DELETE', async () => {
     const { app } = targetsApp();
     const created = await requestJson(app, '/api/targets', {
@@ -245,6 +272,27 @@ describe('/api/targets', () => {
 
     const listed = await requestJson(app, '/api/targets');
     assert.equal(listed.body.targets.length, 0);
+  });
+
+  it('bulk delete rejects invalid ids without removing valid files', async () => {
+    const { app } = targetsApp();
+    const a = await requestJson(app, '/api/targets', {
+      method: 'POST',
+      body: sampleDoc({ title: 'Keep me' }),
+    });
+    const cookie = await loginCookie(app);
+
+    const bulk = await requestJson(app, '/api/admin/targets/delete', {
+      method: 'POST',
+      body: { ids: [a.body.id, 'not-a-uuid'] },
+      headers: { Cookie: cookie },
+    });
+    assert.equal(bulk.status, 400);
+    assert.match(String(bulk.body.error), /invalid target id/i);
+
+    const listed = await requestJson(app, '/api/targets');
+    assert.equal(listed.body.targets.length, 1);
+    assert.equal(listed.body.targets[0].id, a.body.id);
   });
 
   it('rejects invalid ids', async () => {
