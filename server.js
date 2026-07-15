@@ -30,7 +30,12 @@ import {
   bootstrapTargetsStore,
   isValidTargetId,
 } from './lib/targets-store.js';
-import { MCP_API_KEY_MIN_LENGTH, resolveMcpAuth } from './lib/mcp/auth.js';
+import {
+  MCP_API_KEY_MIN_LENGTH,
+  MCP_OAUTH_SECRET_MIN_LENGTH,
+  resolveMcpAuth,
+  resolveMcpPublicUrl,
+} from './lib/mcp/auth.js';
 import { mountMcpRoutes } from './lib/mcp/http.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -53,6 +58,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  *   targetsPath?: string,
  *   targetsPersistent?: boolean,
  *   mcpApiKey?: string,
+ *   mcpOauthClientId?: string,
+ *   mcpOauthClientSecret?: string,
+ *   mcpPublicUrl?: string,
  *   warn?: (message: string) => void,
  * }} [deps]
  */
@@ -129,9 +137,22 @@ export function createApp(deps = {}) {
       deps.mcpApiKey !== undefined
         ? deps.mcpApiKey
         : process.env.MCP_API_KEY || '',
+    oauthClientId:
+      deps.mcpOauthClientId !== undefined
+        ? deps.mcpOauthClientId
+        : process.env.MCP_OAUTH_CLIENT_ID || '',
+    oauthClientSecret:
+      deps.mcpOauthClientSecret !== undefined
+        ? deps.mcpOauthClientSecret
+        : process.env.MCP_OAUTH_CLIENT_SECRET || '',
+    publicUrl:
+      deps.mcpPublicUrl !== undefined
+        ? deps.mcpPublicUrl
+        : resolveMcpPublicUrl(),
     warn,
   });
   const mcpConfigured = mcpAuth.configured;
+  const mcpOauthConfigured = mcpAuth.oauthConfigured;
 
   const app = express();
   // Render (and most PaaS) terminate TLS upstream — needed for Secure cookies + req.ip.
@@ -200,6 +221,7 @@ export function createApp(deps = {}) {
       geocodingConfigured: Boolean(geocodingKey),
       adminConfigured,
       mcpConfigured,
+      mcpOauthConfigured,
       configPersistent,
       targetsPersistent,
     };
@@ -576,6 +598,26 @@ if (isMain) {
       );
     } else {
       console.log('MCP: /mcp enabled (Bearer MCP_API_KEY)');
+      if (!process.env.MCP_OAUTH_CLIENT_ID || !process.env.MCP_OAUTH_CLIENT_SECRET) {
+        console.warn(
+          'Warning: MCP_OAUTH_CLIENT_ID / MCP_OAUTH_CLIENT_SECRET not set — Claude OAuth connector stays disabled (Cursor Bearer still works).'
+        );
+      } else if (
+        (process.env.MCP_OAUTH_CLIENT_SECRET || '').trim().length <
+        MCP_OAUTH_SECRET_MIN_LENGTH
+      ) {
+        console.warn(
+          `Warning: MCP_OAUTH_CLIENT_SECRET must be at least ${MCP_OAUTH_SECRET_MIN_LENGTH} characters — OAuth stays disabled.`
+        );
+      } else if (!resolveMcpPublicUrl()) {
+        console.warn(
+          'Warning: MCP_PUBLIC_URL (or RENDER_EXTERNAL_URL) not set — OAuth discovery metadata unavailable.'
+        );
+      } else {
+        console.log(
+          `MCP OAuth: enabled for Claude (issuer ${resolveMcpPublicUrl()})`
+        );
+      }
     }
   });
 }

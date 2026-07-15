@@ -41,7 +41,10 @@ cp .env.example .env
 | `ADMIN_SESSION_SECRET` | ≥16 characters recommended; signs session cookies |
 | `CONFIG_PATH` | Optional absolute path to runtime config MD (Render sets this via Blueprint) |
 | `TARGETS_PATH` | Optional absolute directory for saved target JSON (Render sets `/var/data/targets`) |
-| `MCP_API_KEY` | Optional; ≥16 characters enables remote MCP at `/mcp` (Bearer auth) |
+| `MCP_API_KEY` | Optional; ≥16 characters enables remote MCP at `/mcp` (Bearer for Cursor) |
+| `MCP_OAUTH_CLIENT_ID` | Optional; OAuth client id for Claude.ai custom connector |
+| `MCP_OAUTH_CLIENT_SECRET` | Optional; ≥16 chars; OAuth client secret for Claude |
+| `MCP_PUBLIC_URL` | Public https origin for OAuth metadata (e.g. `https://mq9-reaper.onrender.com`). Falls back to `RENDER_EXTERNAL_URL` |
 
 Then:
 
@@ -102,6 +105,8 @@ On desktop Chrome, Firefox, and Safari (latest):
    - `ADMIN_USERNAME` / `ADMIN_PASSWORD` (≥12 chars) — required to enable the Admin tab
    - `ADMIN_SESSION_SECRET` (≥16 chars) — recommended; signs Admin session cookies
    - `MCP_API_KEY` (≥16 chars) — optional; enables remote MCP at `/mcp`
+   - `MCP_OAUTH_CLIENT_ID` / `MCP_OAUTH_CLIENT_SECRET` (≥16) — optional; Claude.ai OAuth connector
+   - `MCP_PUBLIC_URL` — public https origin for OAuth discovery (or rely on `RENDER_EXTERNAL_URL`)
    - `CONFIG_PATH` is already set by Blueprint to `/var/data/app-config.md`
 4. Deploy, then smoke-check:
    - `/api/health` → `configPersistent: true`
@@ -127,23 +132,43 @@ On desktop Chrome, Firefox, and Safari (latest):
 | `GET /api/admin/session` | `{ adminConfigured, authenticated }` |
 | `GET /api/admin/config` | Current editable defaults (auth) |
 | `PUT /api/admin/config` | Validate + write MD (auth); then Apply & reload in the UI |
-| `POST/GET/DELETE /mcp` | Remote MCP (Streamable HTTP). Enabled only when `MCP_API_KEY` is set (16+) |
+| `POST/GET/DELETE /mcp` | Remote MCP (Streamable HTTP). Enabled when `MCP_API_KEY` is set (16+) |
+| `GET /.well-known/oauth-authorization-server` | OAuth AS metadata (when OAuth configured) |
+| `GET /.well-known/oauth-protected-resource/mcp` | Protected resource metadata (when OAuth configured) |
+| `GET/POST /authorize`, `POST /token` | OAuth authorize + token (when OAuth configured) |
 
 ## Remote MCP (ChatGPT / Claude / Cursor)
 
-When `MCP_API_KEY` is set, the same Render service exposes a Streamable HTTP MCP endpoint that reads and creates target JSON on the persistent disk (same store as Review / Admin).
+When `MCP_API_KEY` is set, the same Render service exposes Streamable HTTP MCP that reads/creates target JSON on the persistent disk (same store as Review / Admin).
 
-1. Set `MCP_API_KEY` (16+ chars) in `.env` or the Render dashboard.
-2. In the host (Claude custom connector, ChatGPT MCP app, Cursor):
-   - URL: `https://<your-service>.onrender.com/mcp` (or `http://localhost:3000/mcp` locally)
-   - Auth: `Authorization: Bearer <MCP_API_KEY>`
-3. Confirm `/api/health` shows `mcpConfigured: true`.
+### Cursor (Bearer)
+
+1. Set `MCP_API_KEY` (16+ chars).
+2. URL: `https://<your-service>.onrender.com/mcp`
+3. Header: `Authorization: Bearer <MCP_API_KEY>`
+4. Health: `mcpConfigured: true`
+
+### Claude.ai (OAuth custom connector)
+
+Claude’s Add custom connector dialog only accepts **OAuth Client ID / Secret** (no Bearer field).
+
+1. Set on Render / `.env`:
+   - `MCP_API_KEY`
+   - `MCP_OAUTH_CLIENT_ID` (GUID)
+   - `MCP_OAUTH_CLIENT_SECRET` (GUID, 16+)
+   - `MCP_PUBLIC_URL=https://mq9-reaper.onrender.com` (no path; or rely on `RENDER_EXTERNAL_URL`)
+2. In Claude → Add custom connector:
+   - **Name:** MQ9 Reaper Targets
+   - **URL:** `https://mq9-reaper.onrender.com/mcp` (must be `/mcp`, not `/mvp`)
+   - **Advanced → OAuth Client ID / Secret:** paste the values above
+3. Click Add, then Connect — Claude opens authorize; the server auto-approves and redirects to Claude’s callback.
+4. Health should show `mcpConfigured: true` and `mcpOauthConfigured: true`.
 
 **Tools:** `list_targets`, `get_target`, `create_target`, `summarize_library`  
 **Resources:** `targets://library`, `targets://{id}`  
 **Prompts:** `inspect_target`, `compare_targets`, `draft_target_package`
 
-`create_target` writes a validated §4 JSON package via `lib/targets-store.js`, so it shows up under Review (server library) and Admin. Delete/rename stay Admin-only. If the key is unset, `/mcp` returns 503.
+`create_target` writes via `lib/targets-store.js` (shows in Review + Admin). Delete/rename stay Admin-only.
 
 ## Project layout
 

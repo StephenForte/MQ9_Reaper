@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, it } from 'node:test';
@@ -244,10 +246,192 @@ describe('/mcp HTTP gate', () => {
     const off = makeApp(dir, '');
     const offHealth = await requestJson(off, '/api/health');
     assert.equal(offHealth.body.mcpConfigured, false);
+    assert.equal(offHealth.body.mcpOauthConfigured, false);
 
     const on = makeApp(dir);
     const onHealth = await requestJson(on, '/api/health');
     assert.equal(onHealth.body.mcpConfigured, true);
+    assert.equal(onHealth.body.mcpOauthConfigured, false);
+  });
+});
+
+describe('/mcp OAuth (Claude connector)', () => {
+  const OAUTH_CLIENT_ID = '11111111-1111-4111-8111-111111111111';
+  const OAUTH_CLIENT_SECRET = 'oauth-client-secret-16+';
+
+  /**
+   * @param {(publicUrl: string) => import('express').Express} buildApp
+   * @param {(ctx: { baseUrl: string, port: number }) => Promise<void>} fn
+   */
+  async function withPublicServer(buildApp, fn) {
+    const probe = net.createServer();
+    await new Promise((resolve) => {
+      probe.listen(0, '127.0.0.1', resolve);
+    });
+    const port = /** @type {import('node:net').AddressInfo} */ (probe.address())
+      .port;
+    await new Promise((resolve, reject) => {
+      probe.close((err) => (err ? reject(err) : resolve()));
+    });
+
+    const publicUrl = `http://127.0.0.1:${port}`;
+    const app = buildApp(publicUrl);
+    const server = app.listen(port, '127.0.0.1');
+    try {
+      await fn({ baseUrl: publicUrl, port });
+    } finally {
+      await new Promise((resolve, reject) => {
+        server.close((err) => (err ? reject(err) : resolve()));
+      });
+    }
+  }
+
+  /**
+   * @returns {{ verifier: string, challenge: string }}
+   */
+  function makePkce() {
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto
+      .createHash('sha256')
+      .update(verifier)
+      .digest('base64url');
+    return { verifier, challenge };
+  }
+
+  it('advertises AS + PRM metadata and completes code+PKCE token exchange', async () => {
+    const dir = makeTmpDir();
+    const store = createTargetsStore(dir);
+    store.write(sampleDoc());
+
+    await withPublicServer(
+      (publicUrl) =>
+        createApp({
+          mapsKey: 'maps',
+          geocodingKey: '',
+          config: stubConfig,
+          adminUsername: '',
+          adminPassword: '',
+          targetsStore: store,
+          targetsPath: dir,
+          targetsPersistent: true,
+          mcpApiKey: MCP_KEY,
+          mcpOauthClientId: OAUTH_CLIENT_ID,
+          mcpOauthClientSecret: OAUTH_CLIENT_SECRET,
+          mcpPublicUrl: publicUrl,
+        }),
+      async ({ baseUrl }) => {
+        const health = await fetch(`${baseUrl}/api/health`).then((r) => r.json());
+        assert.equal(health.mcpConfigured, true);
+        assert.equal(health.mcpOauthConfigured, true);
+
+        const asMeta = await fetch(
+          `${baseUrl}/.well-known/oauth-authorization-server`
+        ).then((r) => r.json());
+        assert.equal(asMeta.issuer, `${baseUrl}/`);
+        assert.ok(asMeta.authorization_endpoint);
+        assert.ok(asMeta.token_endpoint);
+
+        const prm = await fetch(
+          `${baseUrl}/.well-known/oauth-protected-resource/mcp`
+        ).then((r) => r.json());
+        assert.equal(prm.resource, `${baseUrl}/mcp`);
+        assert.deepEqual(prm.authorization_servers, [`${baseUrl}/`]);
+
+        const unauth = await fetch(`${baseUrl}/mcp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'initialize',
+            id: 1,
+            params: {},
+          }),
+        });
+        assert.equal(unauth.status, 401);
+        const www = unauth.headers.get('www-authenticate') || '';
+        assert.match(www, /resource_metadata=/);
+
+        const { verifier, challenge } = makePkce();
+        const redirectUri = 'https://claude.ai/api/mcp/auth_callback';
+        const authUrl = new URL('/authorize', baseUrl);
+        authUrl.searchParams.set('response_type', 'code');
+        authUrl.searchParams.set('client_id', OAUTH_CLIENT_ID);
+        authUrl.searchParams.set('redirect_uri', redirectUri);
+        authUrl.searchParams.set('code_challenge', challenge);
+        authUrl.searchParams.set('code_challenge_method', 'S256');
+        authUrl.searchParams.set('state', 'test-state');
+        authUrl.searchParams.set('resource', `${baseUrl}/mcp`);
+
+        const authRes = await fetch(authUrl, { redirect: 'manual' });
+        assert.equal(authRes.status, 302);
+        const location = authRes.headers.get('location');
+        assert.ok(location);
+        const redirected = new URL(location);
+        assert.equal(redirected.origin + redirected.pathname, redirectUri);
+        assert.equal(redirected.searchParams.get('state'), 'test-state');
+        const code = redirected.searchParams.get('code');
+        assert.ok(code);
+
+        const tokenRes = await fetch(`${baseUrl}/token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            code,
+            code_verifier: verifier,
+            redirect_uri: redirectUri,
+            client_id: OAUTH_CLIENT_ID,
+            client_secret: OAUTH_CLIENT_SECRET,
+            resource: `${baseUrl}/mcp`,
+          }),
+        });
+        assert.equal(tokenRes.status, 200);
+        const tokens = await tokenRes.json();
+        assert.ok(tokens.access_token);
+        assert.equal(tokens.token_type.toLowerCase(), 'bearer');
+
+        const transport = new StreamableHTTPClientTransport(
+          new URL(`${baseUrl}/mcp`),
+          {
+            requestInit: {
+              headers: {
+                Authorization: `Bearer ${tokens.access_token}`,
+              },
+            },
+          }
+        );
+        const client = new Client({ name: 'oauth-test', version: '1.0.0' });
+        await client.connect(transport);
+        try {
+          const listed = parseToolJson(
+            await client.callTool({ name: 'list_targets', arguments: {} })
+          );
+          assert.equal(listed.targets.length, 1);
+        } finally {
+          await client.close();
+        }
+
+        const apiKeyTransport = new StreamableHTTPClientTransport(
+          new URL(`${baseUrl}/mcp`),
+          {
+            requestInit: {
+              headers: { Authorization: `Bearer ${MCP_KEY}` },
+            },
+          }
+        );
+        const apiKeyClient = new Client({
+          name: 'api-key-test',
+          version: '1.0.0',
+        });
+        await apiKeyClient.connect(apiKeyTransport);
+        try {
+          const tools = await apiKeyClient.listTools();
+          assert.ok(tools.tools.some((t) => t.name === 'list_targets'));
+        } finally {
+          await apiKeyClient.close();
+        }
+      }
+    );
   });
 });
 
