@@ -8,6 +8,7 @@ import {
   isValidTargetId,
   resolveTargetsPath,
 } from '../lib/targets-store.js';
+import { GAME_SCHEMA_ID } from '../public/js/schema.js';
 
 /** @type {string[]} */
 const tmpDirs = [];
@@ -102,6 +103,8 @@ describe('createTargetsStore', () => {
     assert.equal(read.ok, true);
     if (!read.ok) return;
     assert.equal(read.document.title, 'Scout package');
+    assert.equal(read.document.schema, GAME_SCHEMA_ID);
+    assert.equal(read.document.fictional, true);
 
     const patched = store.updateMeta(written.id, {
       title: 'Renamed',

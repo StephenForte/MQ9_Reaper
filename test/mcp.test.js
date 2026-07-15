@@ -125,6 +125,9 @@ function makeApp(dir, mcpApiKey = MCP_KEY) {
     targetsPath: dir,
     targetsPersistent: true,
     mcpApiKey,
+    mcpOauthClientId: '',
+    mcpOauthClientSecret: '',
+    mcpPublicUrl: '',
   });
 }
 
@@ -267,7 +270,8 @@ describe('/mcp HTTP gate', () => {
       body: { jsonrpc: '2.0', method: 'initialize', id: 1, params: {} },
     });
     assert.equal(status, 401);
-    assert.match(body.error, /Bearer/i);
+    const err = body.error || body.error_description || '';
+    assert.match(String(err), /Bearer|invalid_token|Authorization/i);
   });
 
   it('reports mcpConfigured on health', async () => {
@@ -481,6 +485,9 @@ describe('/mcp tools and resources', () => {
       targetsPath: dir,
       targetsPersistent: true,
       mcpApiKey: MCP_KEY,
+      mcpOauthClientId: '',
+      mcpOauthClientSecret: '',
+      mcpPublicUrl: '',
     });
 
     await withMcpClient(app, MCP_KEY, async (client, baseUrl) => {
@@ -568,6 +575,9 @@ describe('/mcp tools and resources', () => {
       targetsPath: dir,
       targetsPersistent: true,
       mcpApiKey: MCP_KEY,
+      mcpOauthClientId: '',
+      mcpOauthClientSecret: '',
+      mcpPublicUrl: '',
     });
 
     await withMcpClient(app, MCP_KEY, async (client) => {

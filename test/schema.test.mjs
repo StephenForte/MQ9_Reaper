@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   SCHEMA_VERSION,
+  GAME_SCHEMA_ID,
   buildTargetFile,
   exportCenterSource,
   normalizeTargetFileMeta,
@@ -214,6 +215,8 @@ describe('buildTargetFile', () => {
     if (!built.ok) return;
 
     assert.equal(built.document.version, SCHEMA_VERSION);
+    assert.equal(built.document.schema, GAME_SCHEMA_ID);
+    assert.equal(built.document.fictional, true);
     assert.equal(built.document.title, 'Oakley shortlist');
     assert.equal(built.document.category, 'training');
     assert.equal(built.document.center.source, 'latlng');
@@ -310,6 +313,47 @@ describe('validateTargetFile', () => {
     if (!result.ok) return;
     assert.equal(result.document.title, undefined);
     assert.equal(result.document.category, undefined);
+    assert.equal(result.document.schema, undefined);
+    assert.equal(result.document.fictional, undefined);
+  });
+
+  it('accepts and preserves game schema tags', () => {
+    const result = validateTargetFile({
+      ...valid,
+      schema: GAME_SCHEMA_ID,
+      fictional: true,
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.document.schema, GAME_SCHEMA_ID);
+    assert.equal(result.document.fictional, true);
+  });
+
+  it('rejects invalid or one-sided game schema tags', () => {
+    assert.equal(
+      validateTargetFile({ ...valid, schema: GAME_SCHEMA_ID }).ok,
+      false
+    );
+    assert.equal(
+      validateTargetFile({ ...valid, fictional: true }).ok,
+      false
+    );
+    assert.equal(
+      validateTargetFile({
+        ...valid,
+        schema: 'other',
+        fictional: true,
+      }).ok,
+      false
+    );
+    assert.equal(
+      validateTargetFile({
+        ...valid,
+        schema: GAME_SCHEMA_ID,
+        fictional: false,
+      }).ok,
+      false
+    );
   });
 
   it('rejects empty title/category when present and one-sided meta', () => {
