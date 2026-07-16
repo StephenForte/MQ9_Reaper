@@ -113,3 +113,26 @@ export function iconForSavedTarget() {
     anchor: new google.maps.Point(size / 2, size / 2),
   };
 }
+
+/**
+ * BDA scored circle — fill/stroke from red→green, optional % label in SVG.
+ * @param {{ fill: string, stroke: string }} colors
+ * @param {string} [labelText] e.g. "87%"
+ * @returns {google.maps.Icon}
+ */
+export function iconForBdaScore(colors, labelText = '') {
+  const r = 11;
+  const size = r * 2 + 6;
+  const c = size / 2;
+  const label =
+    labelText !== ''
+      ? `<text x="${c}" y="${c + 3.5}" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="8" font-weight="600" fill="#0a0f14">${labelText.replace(/%/g, '')}</text>`
+      : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${c}" cy="${c}" r="${r}" fill="${colors.fill}" stroke="${colors.stroke}" stroke-width="1.75"/>${label}</svg>`;
+  const url = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  return {
+    url,
+    scaledSize: new google.maps.Size(size, size),
+    anchor: new google.maps.Point(size / 2, size / 2),
+  };
+}

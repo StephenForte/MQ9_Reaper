@@ -55,6 +55,19 @@
             type="button"
             class="tab"
             role="tab"
+            id="tab-bda"
+            aria-selected="false"
+            aria-controls="panel-bda"
+            data-tab="bda"
+            tabindex="-1"
+          >
+            <span class="tab-index" aria-hidden="true">03</span>
+            <span class="tab-label">BDA</span>
+          </button>
+          <button
+            type="button"
+            class="tab"
+            role="tab"
             id="tab-admin"
             aria-selected="false"
             aria-controls="panel-admin"
@@ -62,7 +75,7 @@
             tabindex="-1"
             hidden
           >
-            <span class="tab-index" aria-hidden="true">03</span>
+            <span class="tab-index" aria-hidden="true">04</span>
             <span class="tab-label">Admin</span>
           </button>
         </nav>
@@ -461,6 +474,158 @@
               aria-label="Review map"
             ></div>
             <div id="map-review-error" class="map-error" hidden></div>
+          </div>
+        </section>
+
+        <section
+          id="panel-bda"
+          class="panel"
+          role="tabpanel"
+          aria-labelledby="tab-bda"
+          hidden
+        >
+          <aside class="side-panel">
+            <div class="side-intro">
+              <h2 class="side-title">BDA</h2>
+              <p class="side-copy">
+                Load a saved targets JSON to assess battle damage. Each point
+                gets a damage score from 65%–100%; marker color shifts from red
+                (lower) to green (higher). Read-only.
+              </p>
+            </div>
+
+            <section class="side-section" aria-labelledby="bda-upload-heading">
+              <h3 id="bda-upload-heading" class="side-section-title">
+                Upload
+              </h3>
+              <label class="field field-file">
+                <span class="field-label">Targets JSON</span>
+                <input
+                  id="input-bda-file"
+                  name="bdaFile"
+                  type="file"
+                  accept=".json,application/json"
+                />
+              </label>
+              <p class="hint hint-tight">
+                Invalid files clear the map and list so you only see a successful
+                load.
+              </p>
+              <p id="bda-error" class="field-error" role="alert" hidden></p>
+              <p id="bda-status" class="hint hint-tight empty-state">
+                No file loaded yet.
+              </p>
+            </section>
+
+            <section
+              class="side-section"
+              aria-labelledby="bda-server-heading"
+            >
+              <div class="admin-toolbar">
+                <h3 id="bda-server-heading" class="side-section-title">
+                  Saved on server
+                </h3>
+                <button
+                  type="button"
+                  class="btn btn-quiet"
+                  id="btn-bda-refresh-server"
+                >
+                  Refresh
+                </button>
+              </div>
+              <p class="hint hint-tight">
+                Load a file previously saved from Target Selection.
+              </p>
+              <div
+                id="bda-server-list"
+                class="review-server-list"
+                role="list"
+              ></div>
+              <p
+                id="bda-server-empty"
+                class="hint hint-tight empty-state"
+                hidden
+              >
+                No saved files on the server yet.
+              </p>
+              <p
+                id="bda-server-error"
+                class="field-error"
+                role="alert"
+                hidden
+              ></p>
+            </section>
+
+            <section
+              id="section-bda-meta"
+              class="side-section"
+              aria-labelledby="bda-meta-heading"
+              hidden
+            >
+              <h3 id="bda-meta-heading" class="side-section-title">
+                File summary
+              </h3>
+              <dl class="meta-list">
+                <div>
+                  <dt>File</dt>
+                  <dd id="bda-filename-label">—</dd>
+                </div>
+                <div>
+                  <dt>Title</dt>
+                  <dd id="bda-title-label">—</dd>
+                </div>
+                <div>
+                  <dt>Category</dt>
+                  <dd id="bda-category-label">—</dd>
+                </div>
+                <div>
+                  <dt>Created</dt>
+                  <dd id="bda-created-label">—</dd>
+                </div>
+                <div>
+                  <dt>Center</dt>
+                  <dd id="bda-center-label">—</dd>
+                </div>
+                <div>
+                  <dt>Source</dt>
+                  <dd id="bda-source-label">—</dd>
+                </div>
+                <div>
+                  <dt>Radius</dt>
+                  <dd id="bda-radius-label">—</dd>
+                </div>
+                <div>
+                  <dt>Targets</dt>
+                  <dd id="bda-count-label">—</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section
+              id="section-bda-targets"
+              class="side-section"
+              aria-labelledby="bda-targets-heading"
+              hidden
+            >
+              <h3 id="bda-targets-heading" class="side-section-title">
+                Damage assessment
+              </h3>
+              <p class="hint">
+                Click a row or map marker to view name and BDA score. Color
+                scales red (65%) → green (100%).
+              </p>
+              <div id="bda-target-list" class="review-target-list"></div>
+            </section>
+          </aside>
+          <div class="map-stage">
+            <div class="map-frame" aria-hidden="true"></div>
+            <div
+              id="map-bda"
+              class="map"
+              role="application"
+              aria-label="BDA map"
+            ></div>
+            <div id="map-bda-error" class="map-error" hidden></div>
           </div>
         </section>
 

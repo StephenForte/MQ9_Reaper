@@ -745,6 +745,38 @@ body {
   line-height: 1.4;
 }
 
+.bda-target-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.bda-target-header .review-target-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.bda-score-swatch {
+  flex-shrink: 0;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(232, 238, 244, 0.25);
+}
+
+.bda-score-value {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.bda-info-score {
+  font-weight: 600;
+}
+
 .map-stage {
   position: relative;
   min-height: 0;

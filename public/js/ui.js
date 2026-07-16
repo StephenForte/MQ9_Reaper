@@ -3,7 +3,7 @@
  */
 
 /**
- * @param {'select' | 'review'} panel
+ * @param {'select' | 'review' | 'bda'} panel
  * @param {string} title
  * @param {string} message
  */
@@ -21,7 +21,7 @@ export function showMapError(panel, title, message) {
 }
 
 /**
- * @param {'select' | 'review'} panel
+ * @param {'select' | 'review' | 'bda'} panel
  */
 export function hideMapError(panel) {
   const el = document.getElementById(`map-${panel}-error`);

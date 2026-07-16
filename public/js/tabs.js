@@ -1,5 +1,5 @@
 /**
- * Tab shell (Target Selection | Upload to Reaper | Admin).
+ * Tab shell (Target Selection | Upload to Reaper | BDA | Admin).
  * Skips tabs with the hidden attribute (e.g. Admin when not configured).
  * @param {{
  *   onActivate: (tab: string) => void

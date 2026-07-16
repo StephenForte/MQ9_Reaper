@@ -1,4 +1,5 @@
 import { createAdminController } from './admin.js';
+import { createBdaController } from './bda.js';
 import { ensureMapsApi } from './maps-loader.js';
 import { createReviewController } from './review.js';
 import { createSelectionController } from './selection.js';
@@ -17,6 +18,7 @@ const mapsByPanel = new Map();
 
 const selection = createSelectionController();
 const review = createReviewController();
+const bda = createBdaController();
 const admin = createAdminController();
 
 async function fetchConfig() {
@@ -28,7 +30,7 @@ async function fetchConfig() {
 }
 
 /**
- * @param {'select' | 'review'} panel
+ * @param {'select' | 'review' | 'bda'} panel
  * @param {AppConfig} config
  */
 function initMap(panel, config) {
@@ -55,22 +57,26 @@ function initMap(panel, config) {
 
   if (panel === 'select') {
     selection.attachMap(map, config);
-  } else {
+  } else if (panel === 'review') {
     review.attachMap(map, config);
+  } else {
+    bda.attachMap(map, config);
   }
 
   requestAnimationFrame(() => {
     google.maps.event.trigger(map, 'resize');
     if (panel === 'select') {
       selection.refit();
-    } else {
+    } else if (panel === 'review') {
       review.refit();
+    } else {
+      bda.refit();
     }
   });
 }
 
 /**
- * @param {'select' | 'review'} panel
+ * @param {'select' | 'review' | 'bda'} panel
  */
 async function ensureMap(panel) {
   if (!runtimeConfig) return;
@@ -103,10 +109,12 @@ async function ensureMap(panel) {
 function onTabActivate(tabName) {
   if (tabName === 'admin') return;
 
-  if (tabName !== 'select' && tabName !== 'review') return;
+  if (tabName !== 'select' && tabName !== 'review' && tabName !== 'bda') return;
 
   if (tabName === 'review') {
     void review.refreshServerLibrary();
+  } else if (tabName === 'bda') {
+    void bda.refreshServerLibrary();
   }
 
   const map = mapsByPanel.get(tabName);
@@ -115,19 +123,22 @@ function onTabActivate(tabName) {
       google.maps.event.trigger(map, 'resize');
       if (tabName === 'select') {
         selection.refit();
-      } else {
+      } else if (tabName === 'review') {
         review.refit();
+      } else {
+        bda.refit();
       }
     });
     return;
   }
-  ensureMap(tabName);
+  ensureMap(/** @type {'select' | 'review' | 'bda'} */ (tabName));
 }
 
 async function boot() {
   wireTabs({ onActivate: onTabActivate });
   selection.wireForms();
   review.wireUpload();
+  bda.wireUpload();
   admin.wireForms();
 
   try {
