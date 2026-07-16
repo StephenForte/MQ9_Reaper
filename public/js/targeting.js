@@ -1,5 +1,10 @@
 import { byId, byIdAs } from './dom.js';
-import { PRIORITIES, validateFileMeta, validateTargetingRow } from './schema.js';
+import { PRIORITIES } from './schema.js';
+import {
+  collectValidatedTargeting,
+  isTargetingSelectionStale,
+  targetingExportGate,
+} from './targeting-logic.js';
 import { setFieldError } from './ui.js';
 
 /**
@@ -282,32 +287,18 @@ export function createTargetingController() {
     const buttons = [downloadBtn, saveServerBtn].filter(Boolean);
     if (buttons.length === 0) return;
 
-    const disable = (title) => {
-      for (const btn of buttons) {
-        btn.disabled = true;
-        btn.title = title;
-      }
-    };
-
-    if (!visible || stale || rows.length === 0) {
-      disable(
-        stale
-          ? 'Selection changed — save targets again'
-          : 'Complete the targeting list first'
-      );
-      return;
-    }
-    syncAllFromDom();
-    const metaOk = validateFileMeta(readFileMeta()).ok;
-    const rowsOk = rows.every((row) => validateTargetingRow(row).ok);
-    const ready = metaOk && rowsOk;
+    if (visible && !stale && rows.length > 0) syncAllFromDom();
+    const meta = readFileMeta();
+    const gate = targetingExportGate({
+      visible,
+      stale,
+      rows,
+      title: meta.title,
+      category: meta.category,
+    });
     for (const btn of buttons) {
-      btn.disabled = !ready;
-      btn.title = ready
-        ? ''
-        : !metaOk
-          ? 'Enter a title and category'
-          : 'Fill name, confidence, and priority on every row';
+      btn.disabled = !gate.ready;
+      btn.title = gate.title;
     }
   }
 
@@ -410,14 +401,7 @@ export function createTargetingController() {
   function syncWithSelection(candidates) {
     if (!visible) return;
 
-    const liveIds = candidates
-      .filter((dot) => dot.selected)
-      .map((dot) => dot.id);
-    const sameIds =
-      liveIds.length === snapshotCandidateIds.length &&
-      liveIds.every((id, i) => id === snapshotCandidateIds[i]);
-
-    if (sameIds) {
+    if (!isTargetingSelectionStale(candidates, snapshotCandidateIds)) {
       if (stale) {
         stale = false;
         setStaleMessage('');
@@ -450,65 +434,33 @@ export function createTargetingController() {
    * }}
    */
   function collectValidated(limits) {
-    if (!visible) {
-      return { ok: false, message: 'Save Targets first to build the list.' };
-    }
-    if (stale) {
-      return {
-        ok: false,
-        message:
-          'Selection changed. Click Save Targets again before downloading or saving to the server.',
-      };
-    }
-
     syncAllFromDom();
     const { list } = els();
     list?.querySelectorAll('.targeting-row').forEach((article) => {
       if (article instanceof HTMLElement) clearRowError(article);
     });
 
-    const meta = validateFileMeta(readFileMeta());
-    if (!meta.ok) {
-      return { ok: false, message: meta.message, field: meta.field };
-    }
+    const meta = readFileMeta();
+    const result = collectValidatedTargeting({
+      visible,
+      stale,
+      rows,
+      title: meta.title,
+      category: meta.category,
+      minSelections: limits.minSelections,
+      maxSelections: limits.maxSelections,
+    });
 
-    if (
-      rows.length < limits.minSelections ||
-      rows.length > limits.maxSelections
-    ) {
-      return {
-        ok: false,
-        message: `Select between ${limits.minSelections} and ${limits.maxSelections} targets (found ${rows.length}).`,
-      };
-    }
-
-    for (let i = 0; i < rows.length; i += 1) {
-      const result = validateTargetingRow(rows[i]);
-      if (!result.ok) {
-        const article = list?.querySelector(
-          `.targeting-row[data-index="${i}"]`
-        );
-        if (article instanceof HTMLElement) {
-          showRowError(article, result.message, result.field);
-        }
-        return {
-          ok: false,
-          message: `Target ${rows[i].id}: ${result.message}`,
-          rowIndex: i,
-          field: result.field,
-        };
+    if (!result.ok && result.rowIndex != null && result.rowMessage) {
+      const article = list?.querySelector(
+        `.targeting-row[data-index="${result.rowIndex}"]`
+      );
+      if (article instanceof HTMLElement) {
+        showRowError(article, result.rowMessage, result.field);
       }
     }
 
-    return {
-      ok: true,
-      title: meta.title,
-      category: meta.category,
-      rows: rows.map((row) => ({
-        ...row,
-        name: row.name.trim(),
-      })),
-    };
+    return result;
   }
 
   wireMetaFields();

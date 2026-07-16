@@ -292,7 +292,7 @@
                 </button>
               </div>
               <p id="targeting-error" class="field-error" role="alert" hidden></p>
-              <p id="targeting-success" class="hint hint-success hint-tight" hidden></p>
+              <p id="targeting-success" class="hint hint-success hint-tight" role="status" hidden></p>
             </section>
 
             <dl class="meta-list status-dock" aria-label="Current selection status">
@@ -361,7 +361,7 @@
                 load.
               </p>
               <p id="review-error" class="field-error" role="alert" hidden></p>
-              <p id="review-status" class="hint hint-tight empty-state">
+              <p id="review-status" class="hint hint-tight empty-state" role="status">
                 No file loaded yet.
               </p>
             </section>
@@ -512,7 +512,7 @@
                 load.
               </p>
               <p id="bda-error" class="field-error" role="alert" hidden></p>
-              <p id="bda-status" class="hint hint-tight empty-state">
+              <p id="bda-status" class="hint hint-tight empty-state" role="status">
                 No file loaded yet.
               </p>
             </section>
@@ -611,9 +611,17 @@
                 Damage assessment
               </h3>
               <p class="hint">
-                Click a row or map marker to view name and BDA score. Color
-                scales red (65%) → green (100%).
+                Click a row or map marker to view name and BDA score. List is
+                sorted lowest damage first.
               </p>
+              <div
+                class="bda-score-legend"
+                aria-label="BDA score color scale from 65 percent red to 100 percent green"
+              >
+                <span class="bda-score-legend-label">65%</span>
+                <div class="bda-score-legend-bar" aria-hidden="true"></div>
+                <span class="bda-score-legend-label">100%</span>
+              </div>
               <div id="bda-target-list" class="review-target-list"></div>
             </section>
           </aside>

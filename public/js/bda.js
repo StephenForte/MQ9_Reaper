@@ -8,10 +8,12 @@ import { iconForBdaScore } from './dot-markers.js';
 import {
   assignBdaScores,
   colorForBdaScore,
+  formatBdaLoadStatus,
   formatBdaScoreLabel,
 } from './bda-logic.js';
 import { createRadiusOverlay } from './map-radius-overlay.js';
 import {
+  INVALID_STORED_TARGET_MESSAGE,
   formatReviewMeta,
   parseTargetFileJson,
 } from './review-logic.js';
@@ -169,8 +171,7 @@ export function createBdaController() {
     if (nodes.metaSection) nodes.metaSection.hidden = false;
     if (nodes.listSection) nodes.listSection.hidden = false;
     if (nodes.status) {
-      const n = loadedFile.targets.length;
-      nodes.status.textContent = `Loaded ${n} target${n === 1 ? '' : 's'} with BDA scores.`;
+      nodes.status.textContent = formatBdaLoadStatus(scoresById.values());
     }
   }
 
@@ -181,7 +182,15 @@ export function createBdaController() {
 
     if (!loadedFile) return;
 
-    for (const target of loadedFile.targets) {
+    // Lowest damage first — triage-friendly for BDA review.
+    const ordered = [...loadedFile.targets].sort((a, b) => {
+      const scoreA = scoresById.get(a.id) ?? 65;
+      const scoreB = scoresById.get(b.id) ?? 65;
+      if (scoreA !== scoreB) return scoreA - scoreB;
+      return a.id.localeCompare(b.id);
+    });
+
+    for (const target of ordered) {
       const score = scoresById.get(target.id) ?? 65;
       const colors = colorForBdaScore(score);
 
@@ -393,7 +402,7 @@ export function createBdaController() {
           : 'review-server-meta';
         if (item.invalid) {
           meta.textContent =
-            item.error || 'Corrupt or schema-invalid — delete from Admin.';
+            item.error || INVALID_STORED_TARGET_MESSAGE;
         } else {
           const cat = item.category ? item.category : '—';
           meta.textContent = `${cat} · ${item.createdAt || '—'}`;

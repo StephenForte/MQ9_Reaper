@@ -1,5 +1,6 @@
 import { confirmAction } from './confirm.js';
 import { byId, byIdAs } from './dom.js';
+import { INVALID_STORED_TARGET_MESSAGE } from './review-logic.js';
 import { setFieldError, setStatusMessage } from './ui.js';
 
 /**
@@ -257,7 +258,7 @@ export function createAdminController() {
       const meta = document.createElement('p');
       meta.className = item.invalid ? 'hint hint-tight hint-warn' : 'hint hint-tight';
       meta.textContent = item.invalid
-        ? item.error || 'File is corrupt or schema-invalid. Delete it from Admin.'
+        ? item.error || INVALID_STORED_TARGET_MESSAGE
         : item.createdAt || '';
 
       const saveBtn = document.createElement('button');

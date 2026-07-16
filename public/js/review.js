@@ -6,6 +6,7 @@ import { byId, byIdAs } from './dom.js';
 import { iconForSavedTarget } from './dot-markers.js';
 import { createRadiusOverlay } from './map-radius-overlay.js';
 import {
+  INVALID_STORED_TARGET_MESSAGE,
   formatConfidenceLabel,
   formatPriorityLabel,
   formatReviewMeta,
@@ -371,7 +372,7 @@ export function createReviewController() {
           : 'review-server-meta';
         if (item.invalid) {
           meta.textContent =
-            item.error || 'Corrupt or schema-invalid — delete from Admin.';
+            item.error || INVALID_STORED_TARGET_MESSAGE;
         } else {
           const cat = item.category ? item.category : '—';
           meta.textContent = `${cat} · ${item.createdAt || '—'}`;

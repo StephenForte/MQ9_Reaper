@@ -67,6 +67,7 @@ public/
     selection.js          Selection-tab center, radius, candidates, export
     selection-forms.js    Selection location / radius form wiring
     selection-logic.js    Pure selection helpers (testable)
+    targeting-logic.js    Pure annotate-list export gates (testable)
     reverse-geocode.js    Client reverse-geocode fetch helper
     review.js             Review-tab upload, render, InfoWindows
     review-logic.js       Pure parse + Review display helpers (testable)

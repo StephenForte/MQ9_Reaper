@@ -7,8 +7,10 @@ import {
   bdaScoreNorm,
   clampBdaScore,
   colorForBdaScore,
+  formatBdaLoadStatus,
   formatBdaScoreLabel,
   randomBdaScore,
+  summarizeBdaScores,
 } from '../public/js/bda-logic.js';
 
 describe('bda-logic', () => {
@@ -52,5 +54,25 @@ describe('bda-logic', () => {
     assert.equal(bdaScoreNorm(65), 0);
     assert.equal(bdaScoreNorm(100), 1);
     assert.equal(formatBdaScoreLabel(87), '87%');
+  });
+
+  it('summarizeBdaScores and formatBdaLoadStatus', () => {
+    assert.deepEqual(summarizeBdaScores([]), {
+      count: 0,
+      avg: null,
+      min: null,
+      max: null,
+    });
+    assert.deepEqual(summarizeBdaScores([65, 100, 80]), {
+      count: 3,
+      avg: 82,
+      min: 65,
+      max: 100,
+    });
+    assert.equal(formatBdaLoadStatus([]), 'No file loaded.');
+    assert.match(
+      formatBdaLoadStatus([65, 100]),
+      /Loaded 2 targets with BDA scores \(avg 83%, range 65–100%\)\./
+    );
   });
 });

@@ -54,6 +54,8 @@ export function createSelectionController() {
   let activeAnnotateCandidateId = null;
   /** @type {string} */
   let regionLabel = 'Region';
+  /** True while Save Targets is reverse-geocoding; freezes selection edits. */
+  let resolvingPlaceNames = false;
 
   function selectionLimits() {
     return {
@@ -129,7 +131,7 @@ export function createSelectionController() {
     }
 
     const saveBtn = byIdAs('btn-save-targets');
-    if (saveBtn) {
+    if (saveBtn && !resolvingPlaceNames) {
       saveBtn.disabled = !valid;
       saveBtn.title = valid
         ? 'Open targeting list for selected targets'
@@ -140,14 +142,16 @@ export function createSelectionController() {
 
     const loadBtn = byIdAs('btn-load-dots');
     if (loadBtn) {
-      loadBtn.disabled = !currentCenter || !config;
+      loadBtn.disabled = resolvingPlaceNames || !currentCenter || !config;
       loadBtn.textContent =
         candidates.length > 0 ? 'Reload targets' : 'Load targets';
-      loadBtn.title = loadBtn.disabled
-        ? 'Set a center first (address, map click, or lat/long)'
-        : candidates.length > 0
-          ? 'Generate a new set of candidate targets'
-          : 'Generate candidate targets inside the radius';
+      loadBtn.title = resolvingPlaceNames
+        ? 'Wait for place names to finish resolving'
+        : loadBtn.disabled
+          ? 'Set a center first (address, map click, or lat/long)'
+          : candidates.length > 0
+            ? 'Generate a new set of candidate targets'
+            : 'Generate candidate targets inside the radius';
     }
 
     targeting.syncWithSelection(candidates);
@@ -203,7 +207,7 @@ export function createSelectionController() {
    * @param {string} id
    */
   function onDotClick(id) {
-    if (!config) return;
+    if (!config || resolvingPlaceNames) return;
     const { max, blockExtra } = selectionLimits();
     const result = toggleDotSelection(candidates, id, {
       maxSelections: max,
@@ -259,7 +263,7 @@ export function createSelectionController() {
    * @param {import('./app-types.js').LatLng} point
    */
   function addCustomDotAt(point) {
-    if (!config) return;
+    if (!config || resolvingPlaceNames) return;
     const { max, blockExtra } = selectionLimits();
     const result = addCustomCandidate(candidates, point, {
       maxSelections: max,
@@ -277,6 +281,8 @@ export function createSelectionController() {
    * @returns {Promise<void>}
    */
   async function onBlankMapClick(point) {
+    if (resolvingPlaceNames) return;
+
     const choice = await chooseAction(
       'Click was outside existing targets. Add a custom target here, recenter the area of interest, or leave the map unchanged.',
       {
@@ -287,6 +293,7 @@ export function createSelectionController() {
       }
     );
 
+    if (resolvingPlaceNames) return;
     if (choice === 'primary') {
       addCustomDotAt(point);
       return;
@@ -301,6 +308,7 @@ export function createSelectionController() {
    * @returns {Promise<boolean>}
    */
   async function confirmDestructiveChange(reason) {
+    if (resolvingPlaceNames) return false;
     if (!config?.defaults.confirmOnRecenter) return true;
     if (!willLoseWork()) return true;
 
@@ -373,7 +381,7 @@ export function createSelectionController() {
    * @returns {Promise<boolean>}
    */
   async function setCenter(center, source, opts = {}) {
-    if (!map || !overlay) return false;
+    if (!map || !overlay || resolvingPlaceNames) return false;
 
     const {
       fit = true,
@@ -472,7 +480,7 @@ export function createSelectionController() {
    * @returns {Promise<boolean>}
    */
   async function loadDots() {
-    if (!map || !currentCenter || !config) return false;
+    if (!map || !currentCenter || !config || resolvingPlaceNames) return false;
 
     if (willLoseWork() && config.defaults.confirmOnRecenter) {
       const ok = await confirmAction(
@@ -510,7 +518,7 @@ export function createSelectionController() {
    */
   async function applyRadiusFromInput() {
     const radiusInput = byIdAs('input-radius');
-    if (!radiusInput) return false;
+    if (!radiusInput || resolvingPlaceNames) return false;
 
     setFieldError('radius-error', '');
     const value = Number(radiusInput.value);
@@ -549,7 +557,7 @@ export function createSelectionController() {
   }
 
   async function saveTargets() {
-    if (!config || !currentCenter) return;
+    if (!config || !currentCenter || resolvingPlaceNames) return;
     const { min, max } = selectionLimits();
     if (!isValidSelection(candidates, min, max)) {
       setFieldError(
@@ -559,14 +567,21 @@ export function createSelectionController() {
       return;
     }
 
+    // Snapshot before awaits so concurrent map edits cannot change the shortlist.
+    const selectedSnapshot = candidates
+      .filter((dot) => dot.selected)
+      .map((dot) => ({ ...dot }));
+
     setFieldError('candidates-error', '');
     setStatusMessage('targeting-place-notice', '');
+    resolvingPlaceNames = true;
     const saveBtn = byIdAs('btn-save-targets');
     if (saveBtn) {
       saveBtn.disabled = true;
       saveBtn.setAttribute('aria-busy', 'true');
       saveBtn.textContent = 'Resolving names…';
     }
+    updateSelectionUi();
 
     let placeLookupFailed = false;
 
@@ -577,11 +592,10 @@ export function createSelectionController() {
         if (!resolved.ok) placeLookupFailed = true;
       }
 
-      const selected = candidates.filter((dot) => dot.selected);
       /** @type {Record<string, string | null>} */
       const placeNamesByCandidateId = {};
       await Promise.all(
-        selected.map(async (dot) => {
+        selectedSnapshot.map(async (dot) => {
           const resolved = await resolvePlaceNameForDot(dot);
           placeNamesByCandidateId[dot.id] = resolved.name;
           if (!resolved.ok) placeLookupFailed = true;
@@ -589,7 +603,7 @@ export function createSelectionController() {
       );
 
       targeting.openWithRows(
-        rowsFromSelectedDots(candidates, {
+        rowsFromSelectedDots(selectedSnapshot, {
           regionLabel,
           placeNamesByCandidateId,
         })
@@ -602,6 +616,7 @@ export function createSelectionController() {
         );
       }
     } finally {
+      resolvingPlaceNames = false;
       if (saveBtn) {
         saveBtn.textContent = 'Save Targets';
         saveBtn.removeAttribute('aria-busy');

@@ -9,6 +9,10 @@ import { normalizeTargetFileMeta, validateTargetFile } from './schema.js';
 
 export const MALFORMED_JSON_MESSAGE = "This file isn't valid JSON.";
 
+/** Operator-facing copy for corrupt / schema-invalid files on the server disk. */
+export const INVALID_STORED_TARGET_MESSAGE =
+  'File is corrupt or schema-invalid. Delete it from Admin.';
+
 /**
  * Parse upload text then validate against §4.
  * @param {string} text

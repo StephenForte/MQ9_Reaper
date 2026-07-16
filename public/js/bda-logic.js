@@ -72,3 +72,41 @@ export function colorForBdaScore(score) {
 export function formatBdaScoreLabel(score) {
   return `${clampBdaScore(score)}%`;
 }
+
+/**
+ * Aggregate stats for a loaded score map.
+ * @param {Iterable<number>} scores
+ * @returns {{ count: number, avg: number | null, min: number | null, max: number | null }}
+ */
+export function summarizeBdaScores(scores) {
+  const values = [...scores].map(clampBdaScore);
+  if (values.length === 0) {
+    return { count: 0, avg: null, min: null, max: null };
+  }
+  let sum = 0;
+  let min = values[0];
+  let max = values[0];
+  for (const score of values) {
+    sum += score;
+    if (score < min) min = score;
+    if (score > max) max = score;
+  }
+  return {
+    count: values.length,
+    avg: Math.round(sum / values.length),
+    min,
+    max,
+  };
+}
+
+/**
+ * Operator status line after a successful BDA load.
+ * @param {Iterable<number>} scores
+ * @returns {string}
+ */
+export function formatBdaLoadStatus(scores) {
+  const summary = summarizeBdaScores(scores);
+  if (summary.count === 0) return 'No file loaded.';
+  const n = summary.count;
+  return `Loaded ${n} target${n === 1 ? '' : 's'} with BDA scores (avg ${summary.avg}%, range ${summary.min}–${summary.max}%).`;
+}

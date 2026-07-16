@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, it } from 'node:test';
 import {
+  INVALID_STORED_TARGET_MESSAGE,
   createTargetsStore,
   isValidTargetId,
   resolveTargetsPath,
@@ -195,11 +196,11 @@ describe('createTargetsStore', () => {
     const byId = Object.fromEntries(listed.map((item) => [item.id, item]));
     assert.equal(byId[valid.id].invalid, undefined);
     assert.equal(byId[corruptId].invalid, true);
-    assert.match(byId[corruptId].error || '', /not valid JSON/i);
+    assert.equal(byId[corruptId].error, INVALID_STORED_TARGET_MESSAGE);
     assert.equal(byId[invalidId].invalid, true);
     assert.equal(byId[invalidId].title, 'Broken schema');
     assert.equal(byId[invalidId].category, 'ops');
-    assert.match(byId[invalidId].error || '', /schema validation/i);
+    assert.equal(byId[invalidId].error, INVALID_STORED_TARGET_MESSAGE);
 
     assert.equal(store.delete(corruptId).ok, true);
     assert.equal(store.delete(invalidId).ok, true);

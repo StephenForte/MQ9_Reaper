@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { buildTargetFile } from '../public/js/schema.js';
 import {
+  INVALID_STORED_TARGET_MESSAGE,
   MALFORMED_JSON_MESSAGE,
   formatConfidenceLabel,
   formatPriorityLabel,
@@ -30,6 +31,14 @@ function validDoc(overrides = {}) {
     ...overrides,
   };
 }
+
+describe('INVALID_STORED_TARGET_MESSAGE', () => {
+  it('uses operator-facing copy (not schema jargon)', () => {
+    assert.match(INVALID_STORED_TARGET_MESSAGE, /corrupt or schema-invalid/i);
+    assert.match(INVALID_STORED_TARGET_MESSAGE, /Admin/i);
+    assert.doesNotMatch(INVALID_STORED_TARGET_MESSAGE, /validation:/i);
+  });
+});
 
 describe('parseTargetFileJson', () => {
   it('returns the §8.3 malformed-JSON message', () => {
