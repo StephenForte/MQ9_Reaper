@@ -76,6 +76,8 @@ const stubConfig = {
   radiusUnit: /** @type {'miles'} */ ('miles'),
   confirmOnRecenter: true,
   seededRng: false,
+  candidateSource: 'overpass',
+  overpassFillRandom: true,
   defaultCenter: { lat: 37.8, lng: -121.7 },
 };
 

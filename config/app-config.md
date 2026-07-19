@@ -9,6 +9,8 @@ mapType: hybrid
 radiusUnit: miles
 confirmOnRecenter: true
 seededRng: false
+candidateSource: overpass
+overpassFillRandom: true
 defaultCenterLat: 37.7996
 defaultCenterLng: -121.7124
 ---
@@ -33,6 +35,8 @@ On Render (P7), Admin writes `/var/data/app-config.md` on the persistent disk (`
 | `radiusUnit` | `miles` only in v1. |
 | `confirmOnRecenter` | If `true`, changing center/radius or reloading targets prompts when ≥1 target is selected. |
 | `seededRng` | If `false`, export writes `seed: null`. Seeded RNG is not planned for v1. |
+| `candidateSource` | `overpass` (OpenStreetMap places via Overpass) or `random` (uniform disk). Selection tab can override for the session. |
+| `overpassFillRandom` | If `true` (default), pad Overpass results with random disk samples when fewer than `dotCount` places are found. |
 | `defaultCenterLat` / `defaultCenterLng` | Startup map center before Selection is set; Review uses the uploaded file’s center after load. |
 
 ## Invariant

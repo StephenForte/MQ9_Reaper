@@ -188,10 +188,21 @@
                 <span class="step-num">3</span> Load &amp; select
               </h3>
               <p class="hint">
-                Load targets inside the radius, then click markers to select.
-                Reload replaces the set (confirms if you already have a
-                selection).
+                Load targets inside the radius (OpenStreetMap places or random
+                disk), then click markers to select. Reload replaces the set
+                (confirms if you already have a selection).
               </p>
+              <label class="field">
+                <span class="field-label">Candidate source</span>
+                <select
+                  id="input-candidate-source"
+                  name="candidateSource"
+                  aria-describedby="candidates-status"
+                >
+                  <option value="overpass">OpenStreetMap places</option>
+                  <option value="random">Random disk</option>
+                </select>
+              </label>
               <div class="candidates-actions">
                 <button
                   type="button"
@@ -761,6 +772,29 @@
 
                 <fieldset class="admin-fieldset">
                   <legend>Candidates &amp; selection</legend>
+                  <div class="field-row">
+                    <label class="field">
+                      <span class="field-label">Default source</span>
+                      <select id="admin-candidateSource" name="candidateSource">
+                        <option value="overpass">overpass — OpenStreetMap places</option>
+                        <option value="random">random — uniform disk</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span class="field-label">Fill OSM shortfalls</span>
+                      <select
+                        id="admin-overpassFillRandom"
+                        name="overpassFillRandom"
+                      >
+                        <option value="true">
+                          true — pad with random when under dot count
+                        </option>
+                        <option value="false">
+                          false — use only OSM places found
+                        </option>
+                      </select>
+                    </label>
+                  </div>
                   <div class="field-row">
                     <label class="field">
                       <span class="field-label">Dot count</span>

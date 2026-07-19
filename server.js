@@ -26,6 +26,7 @@ import {
 } from './lib/admin-session.js';
 import { createLoginRateLimiter } from './lib/login-rate-limit.js';
 import { geocodeAddress, reverseGeocode } from './lib/geocode.js';
+import { queryOverpassPlaces } from './lib/overpass.js';
 import {
   bootstrapTargetsStore,
   isValidTargetId,
@@ -53,6 +54,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  *   loginRateLimiter?: ReturnType<typeof createLoginRateLimiter>,
  *   geocodeFn?: typeof geocodeAddress,
  *   reverseGeocodeFn?: typeof reverseGeocode,
+ *   overpassFn?: typeof queryOverpassPlaces,
  *   targetsStore?: ReturnType<typeof bootstrapTargetsStore>['store'],
  *   targetsPath?: string,
  *   targetsPersistent?: boolean,
@@ -86,6 +88,7 @@ export function createApp(deps = {}) {
     });
   const geocodeFn = deps.geocodeFn || geocodeAddress;
   const reverseGeocodeFn = deps.reverseGeocodeFn || reverseGeocode;
+  const overpassFn = deps.overpassFn || queryOverpassPlaces;
   const warn = deps.warn || ((message) => console.warn(message));
 
   const targetsBoot =
@@ -529,6 +532,60 @@ export function createApp(deps = {}) {
     } catch (err) {
       console.error('Reverse geocode proxy error:', err);
       return res.status(502).json({ error: 'Reverse geocoding request failed.' });
+    }
+  });
+
+  /**
+   * Overpass (OpenStreetMap) proxy — real-world POI candidates inside the radius.
+   * Client sends center + radius only; server builds the QL query.
+   */
+  app.get('/api/overpass', async (req, res) => {
+    const lat = Number(req.query.lat);
+    const lng = Number(req.query.lng);
+    const radiusMiles = Number(req.query.radiusMiles);
+    const limitRaw = req.query.limit;
+    const limit =
+      limitRaw === undefined || limitRaw === ''
+        ? undefined
+        : Number(limitRaw);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res
+        .status(400)
+        .json({ error: 'Pass numeric lat and lng query params.' });
+    }
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ error: 'lat/lng out of range.' });
+    }
+    if (!Number.isFinite(radiusMiles) || !(radiusMiles > 0)) {
+      return res
+        .status(400)
+        .json({ error: 'radiusMiles must be a number greater than 0.' });
+    }
+    if (limit !== undefined && (!Number.isFinite(limit) || limit < 1)) {
+      return res.status(400).json({ error: 'limit must be a number ≥ 1.' });
+    }
+
+    try {
+      const result = await overpassFn({
+        lat,
+        lng,
+        radiusMiles,
+        ...(limit !== undefined ? { limit } : {}),
+      });
+      if (!result.ok) {
+        return res.status(result.status).json({ error: result.error });
+      }
+
+      return res.json({
+        places: result.places,
+        queryRadiusMiles: result.queryRadiusMiles,
+      });
+    } catch (err) {
+      console.error('Overpass proxy error:', err);
+      return res.status(502).json({
+        error: 'OpenStreetMap query failed. Try again, or use random targets.',
+      });
     }
   });
 

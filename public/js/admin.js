@@ -48,6 +48,14 @@ function fillForm(defaults) {
     defaults.blockExtraSelections ? 'true' : 'false'
   );
   setVal('admin-minDotSpacingMeters', defaults.minDotSpacingMeters);
+  setVal(
+    'admin-candidateSource',
+    defaults.candidateSource === 'random' ? 'random' : 'overpass'
+  );
+  setVal(
+    'admin-overpassFillRandom',
+    defaults.overpassFillRandom === false ? 'false' : 'true'
+  );
   setVal('admin-mapType', defaults.mapType);
   setVal(
     'admin-confirmOnRecenter',
@@ -83,6 +91,8 @@ function readFormPatch() {
     maxSelections: num('admin-maxSelections'),
     blockExtraSelections: bool('admin-blockExtraSelections'),
     minDotSpacingMeters: num('admin-minDotSpacingMeters'),
+    candidateSource: byIdAs('admin-candidateSource')?.value || 'overpass',
+    overpassFillRandom: bool('admin-overpassFillRandom'),
     mapType,
     confirmOnRecenter: bool('admin-confirmOnRecenter'),
     defaultCenterLat: num('admin-defaultCenterLat'),

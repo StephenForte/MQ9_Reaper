@@ -4,6 +4,7 @@ import { downloadJson, buildTargetsFilename } from './download.js';
 import { generateCandidateDots } from './dots.js';
 import { iconForDot } from './dot-markers.js';
 import { createRadiusOverlay } from './map-radius-overlay.js';
+import { loadOverpassCandidates } from './overpass-candidates.js';
 import {
   regionLabelFromGeocode,
   specificPlaceName,
@@ -26,7 +27,14 @@ import { setFieldError, setStatusMessage } from './ui.js';
  * @typedef {import('./app-types.js').LatLng} LatLng
  * @typedef {import('./app-types.js').AppConfig} AppConfig
  * @typedef {'address' | 'click' | 'latlng' | 'default'} CenterSource
- * @typedef {{ id: string, lat: number, lng: number, selected: boolean }} CandidateDot
+ * @typedef {{
+ *   id: string,
+ *   lat: number,
+ *   lng: number,
+ *   selected: boolean,
+ *   name?: string | null,
+ *   source?: 'overpass' | 'random',
+ * }} CandidateDot
  */
 
 /**
@@ -56,6 +64,8 @@ export function createSelectionController() {
   let regionLabel = 'Region';
   /** True while Save Targets is reverse-geocoding; freezes selection edits. */
   let resolvingPlaceNames = false;
+  /** True while Load targets is fetching Overpass / generating dots. */
+  let loadingCandidates = false;
 
   function selectionLimits() {
     return {
@@ -67,6 +77,16 @@ export function createSelectionController() {
 
   function willLoseWork() {
     return willLoseSelection(candidates);
+  }
+
+  /**
+   * @returns {'random' | 'overpass'}
+   */
+  function readCandidateSource() {
+    const el = byIdAs('input-candidate-source');
+    if (el?.value === 'random') return 'random';
+    if (el?.value === 'overpass') return 'overpass';
+    return config?.defaults.candidateSource === 'random' ? 'random' : 'overpass';
   }
 
   function updateMeta() {
@@ -142,16 +162,32 @@ export function createSelectionController() {
 
     const loadBtn = byIdAs('btn-load-dots');
     if (loadBtn) {
-      loadBtn.disabled = resolvingPlaceNames || !currentCenter || !config;
-      loadBtn.textContent =
-        candidates.length > 0 ? 'Reload targets' : 'Load targets';
-      loadBtn.title = resolvingPlaceNames
-        ? 'Wait for place names to finish resolving'
-        : loadBtn.disabled
-          ? 'Set a center first (address, map click, or lat/long)'
-          : candidates.length > 0
-            ? 'Generate a new set of candidate targets'
-            : 'Generate candidate targets inside the radius';
+      loadBtn.disabled =
+        resolvingPlaceNames ||
+        loadingCandidates ||
+        !currentCenter ||
+        !config;
+      if (loadingCandidates) {
+        loadBtn.textContent = 'Loading…';
+        loadBtn.setAttribute('aria-busy', 'true');
+        loadBtn.title = 'Loading candidate targets';
+      } else {
+        loadBtn.removeAttribute('aria-busy');
+        loadBtn.textContent =
+          candidates.length > 0 ? 'Reload targets' : 'Load targets';
+        loadBtn.title = resolvingPlaceNames
+          ? 'Wait for place names to finish resolving'
+          : loadBtn.disabled
+            ? 'Set a center first (address, map click, or lat/long)'
+            : candidates.length > 0
+              ? 'Generate a new set of candidate targets'
+              : 'Generate candidate targets inside the radius';
+      }
+    }
+
+    const sourceSelect = byIdAs('input-candidate-source');
+    if (sourceSelect) {
+      sourceSelect.disabled = resolvingPlaceNames || loadingCandidates;
     }
 
     targeting.syncWithSelection(candidates);
@@ -357,6 +393,10 @@ export function createSelectionController() {
    * @returns {Promise<{ name: string | null, ok: boolean }>}
    */
   async function resolvePlaceNameForDot(dot) {
+    if (typeof dot.name === 'string' && dot.name.trim()) {
+      return { name: dot.name.trim(), ok: true };
+    }
+
     const result = await fetchReverseGeocode(dot.lat, dot.lng);
     if (!result.ok) return { name: null, ok: false };
 
@@ -467,6 +507,14 @@ export function createSelectionController() {
     const radiusInput = byIdAs('input-radius');
     if (radiusInput) radiusInput.value = String(currentRadiusMiles);
 
+    const sourceSelect = byIdAs('input-candidate-source');
+    if (sourceSelect) {
+      sourceSelect.value =
+        runtimeConfig.defaults.candidateSource === 'random'
+          ? 'random'
+          : 'overpass';
+    }
+
     const counterEl = byId('selection-counter');
     if (counterEl) {
       counterEl.textContent = `0 / ${runtimeConfig.defaults.maxSelections}`;
@@ -480,7 +528,15 @@ export function createSelectionController() {
    * @returns {Promise<boolean>}
    */
   async function loadDots() {
-    if (!map || !currentCenter || !config || resolvingPlaceNames) return false;
+    if (
+      !map ||
+      !currentCenter ||
+      !config ||
+      resolvingPlaceNames ||
+      loadingCandidates
+    ) {
+      return false;
+    }
 
     if (willLoseWork() && config.defaults.confirmOnRecenter) {
       const ok = await confirmAction(
@@ -497,20 +553,61 @@ export function createSelectionController() {
     setFieldError('candidates-error', '');
     setStatusMessage('targeting-place-notice', '');
     targeting.clear();
-    candidates = generateCandidateDots({
-      center: currentCenter,
-      radiusMiles: currentRadiusMiles,
-      count: config.defaults.dotCount,
-      minSpacingMeters: config.defaults.minDotSpacingMeters,
-    });
-    placeCandidateMarkers();
+
+    const source = readCandidateSource();
+    loadingCandidates = true;
     updateSelectionUi();
 
-    byId('candidates-heading')?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest',
-    });
-    return true;
+    try {
+      if (source === 'overpass') {
+        const result = await loadOverpassCandidates({
+          center: currentCenter,
+          radiusMiles: currentRadiusMiles,
+          count: config.defaults.dotCount,
+          minSpacingMeters: config.defaults.minDotSpacingMeters,
+          fillRandom: config.defaults.overpassFillRandom !== false,
+        });
+        if (!result.ok) {
+          setFieldError('candidates-error', result.error);
+          candidates = [];
+          placeCandidateMarkers();
+          return false;
+        }
+        candidates = result.candidates;
+        if (result.filledRandom > 0) {
+          setStatusMessage(
+            'targeting-place-notice',
+            `Loaded ${result.overpassCount} OpenStreetMap places; filled ${result.filledRandom} with random points to reach ${candidates.length}.`
+          );
+        } else if (
+          result.queryRadiusMiles < currentRadiusMiles - 1e-9
+        ) {
+          setStatusMessage(
+            'targeting-place-notice',
+            `OpenStreetMap query capped at ${result.queryRadiusMiles} mi for this load.`
+          );
+        }
+      } else {
+        candidates = generateCandidateDots({
+          center: currentCenter,
+          radiusMiles: currentRadiusMiles,
+          count: config.defaults.dotCount,
+          minSpacingMeters: config.defaults.minDotSpacingMeters,
+        }).map((dot) => ({ ...dot, source: 'random', name: null }));
+      }
+
+      placeCandidateMarkers();
+      updateSelectionUi();
+
+      byId('candidates-heading')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+      return true;
+    } finally {
+      loadingCandidates = false;
+      updateSelectionUi();
+    }
   }
 
   /**

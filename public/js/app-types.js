@@ -17,6 +17,8 @@
  *     radiusUnit: string,
  *     confirmOnRecenter: boolean,
  *     seededRng: boolean,
+ *     candidateSource: 'random' | 'overpass',
+ *     overpassFillRandom: boolean,
  *     center: LatLng,
  *   }
  * }} AppConfig

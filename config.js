@@ -44,6 +44,8 @@ let runtimeAppConfig = null;
  *   confirmOnRecenter: boolean,
  *   seededRng: boolean,
  *   blockExtraSelections: boolean,
+ *   candidateSource: 'random' | 'overpass',
+ *   overpassFillRandom: boolean,
  *   defaultCenter: { lat: number, lng: number },
  * }} AppConfigValue
  */
@@ -190,6 +192,22 @@ export function toAppConfig(raw) {
   }
   const blockExtraSelections = blockRaw !== 'false';
 
+  const sourceRaw = rawValue(raw, 'candidateSource');
+  if (
+    sourceRaw !== undefined &&
+    sourceRaw !== 'random' &&
+    sourceRaw !== 'overpass'
+  ) {
+    configError('candidateSource', 'must be "random" or "overpass"');
+  }
+  const candidateSource = sourceRaw === 'random' ? 'random' : 'overpass';
+
+  const fillRaw = rawValue(raw, 'overpassFillRandom');
+  if (fillRaw !== undefined && fillRaw !== 'true' && fillRaw !== 'false') {
+    configError('overpassFillRandom', 'must be true or false');
+  }
+  const overpassFillRandom = fillRaw !== 'false';
+
   if (!(radiusMiles > 0)) {
     configError('radiusMiles', 'must be a number > 0');
   }
@@ -238,6 +256,8 @@ export function toAppConfig(raw) {
     confirmOnRecenter,
     seededRng,
     blockExtraSelections,
+    candidateSource,
+    overpassFillRandom,
     defaultCenter: {
       lat: defaultCenterLat,
       lng: defaultCenterLng,
@@ -263,6 +283,8 @@ export function serializeFrontmatter(config) {
     `radiusUnit: ${config.radiusUnit}`,
     `confirmOnRecenter: ${config.confirmOnRecenter}`,
     `seededRng: ${config.seededRng}`,
+    `candidateSource: ${config.candidateSource}`,
+    `overpassFillRandom: ${config.overpassFillRandom}`,
     `defaultCenterLat: ${config.defaultCenter.lat}`,
     `defaultCenterLng: ${config.defaultCenter.lng}`,
     '---',
@@ -333,6 +355,16 @@ export function mergeAdminConfigPatch(body, current) {
         : current.confirmOnRecenter
     ),
     seededRng: String(current.seededRng),
+    candidateSource: String(
+      patch.candidateSource !== undefined
+        ? patch.candidateSource
+        : current.candidateSource
+    ),
+    overpassFillRandom: String(
+      patch.overpassFillRandom !== undefined
+        ? patch.overpassFillRandom
+        : current.overpassFillRandom
+    ),
     defaultCenterLat: String(
       patch.defaultCenterLat !== undefined
         ? patch.defaultCenterLat
@@ -374,6 +406,8 @@ export function defaultsForClient(config) {
     radiusUnit: config.radiusUnit,
     confirmOnRecenter: config.confirmOnRecenter,
     seededRng: config.seededRng,
+    candidateSource: config.candidateSource,
+    overpassFillRandom: config.overpassFillRandom,
     center: {
       lat: config.defaultCenter.lat,
       lng: config.defaultCenter.lng,

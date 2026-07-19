@@ -124,6 +124,7 @@ On desktop Chrome, Firefox, and Safari (latest):
 | `GET /api/config` | Public Maps key + defaults + `adminConfigured` (never geocoding key) |
 | `GET /api/geocode?q=` | Proxies Google Geocoding → lat/lng + address metadata |
 | `GET /api/geocode/reverse?lat=&lng=` | Reverse geocode for region / place default names |
+| `GET /api/overpass?lat=&lng=&radiusMiles=` | OpenStreetMap POIs inside the radius (Overpass proxy; optional `limit`) |
 | `GET /api/targets` | List saved target JSON on disk |
 | `GET /api/targets/:id` | Load one §4 target file |
 | `POST /api/targets` | Save validated target JSON (appears in Review + Admin) |

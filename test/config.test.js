@@ -61,12 +61,31 @@ describe('toAppConfig', () => {
     assert.equal(cfg.blockExtraSelections, true);
     assert.equal(cfg.minDotSpacingMeters, 50);
     assert.equal(cfg.confirmOnRecenter, true);
+    assert.equal(cfg.candidateSource, 'overpass');
+    assert.equal(cfg.overpassFillRandom, true);
   });
 
   it('defaults blockExtraSelections to true when omitted', () => {
     const { blockExtraSelections: _b, ...rest } = base;
     const cfg = toAppConfig(rest);
     assert.equal(cfg.blockExtraSelections, true);
+  });
+
+  it('parses candidateSource random and overpassFillRandom false', () => {
+    const cfg = toAppConfig({
+      ...base,
+      candidateSource: 'random',
+      overpassFillRandom: 'false',
+    });
+    assert.equal(cfg.candidateSource, 'random');
+    assert.equal(cfg.overpassFillRandom, false);
+  });
+
+  it('rejects invalid candidateSource', () => {
+    assert.throws(
+      () => toAppConfig({ ...base, candidateSource: 'poi' }),
+      /candidateSource/
+    );
   });
 
   it('parses blockExtraSelections false', () => {

@@ -35,6 +35,8 @@ const stubConfig = {
   radiusUnit: 'miles',
   confirmOnRecenter: true,
   seededRng: false,
+  candidateSource: 'overpass',
+  overpassFillRandom: true,
   defaultCenter: { lat: 37.8, lng: -121.7 },
 };
 
@@ -255,5 +257,81 @@ describe('/api/geocode/reverse', () => {
     );
     assert.equal(fail.status, 404);
     assert.match(fail.body.error, /No address found/);
+  });
+});
+
+describe('/api/overpass', () => {
+  it('returns 400 when lat/lng missing', async () => {
+    const app = createApp({
+      mapsKey: '',
+      geocodingKey: '',
+      config: stubConfig,
+    });
+    const { status, body } = await getJson(app, '/api/overpass?radiusMiles=3');
+    assert.equal(status, 400);
+    assert.match(body.error, /lat and lng/);
+  });
+
+  it('returns 400 for non-positive radius', async () => {
+    const app = createApp({
+      mapsKey: '',
+      geocodingKey: '',
+      config: stubConfig,
+    });
+    const { status, body } = await getJson(
+      app,
+      '/api/overpass?lat=37.8&lng=-121.7&radiusMiles=0'
+    );
+    assert.equal(status, 400);
+    assert.match(body.error, /radiusMiles/);
+  });
+
+  it('proxies Overpass places via injectable overpassFn', async () => {
+    const app = createApp({
+      mapsKey: '',
+      geocodingKey: '',
+      config: stubConfig,
+      overpassFn: async () => ({
+        ok: true,
+        places: [
+          {
+            lat: 37.8,
+            lng: -121.7,
+            name: 'City Park',
+            osmType: 'way',
+            osmId: 1,
+            kind: 'park',
+          },
+        ],
+        queryRadiusMiles: 3,
+      }),
+    });
+    const { status, body } = await getJson(
+      app,
+      '/api/overpass?lat=37.8&lng=-121.7&radiusMiles=3&limit=10'
+    );
+    assert.equal(status, 200);
+    assert.equal(body.places.length, 1);
+    assert.equal(body.places[0].name, 'City Park');
+    assert.equal(body.queryRadiusMiles, 3);
+  });
+
+  it('proxies Overpass failures with status', async () => {
+    const app = createApp({
+      mapsKey: '',
+      geocodingKey: '',
+      config: stubConfig,
+      overpassFn: async () => ({
+        ok: false,
+        status: 502,
+        error: 'OpenStreetMap service unreachable. Try again, or use random targets.',
+      }),
+    });
+    const { status, body } = await getJson(
+      app,
+      '/api/overpass?lat=1&lng=2&radiusMiles=1'
+    );
+    assert.equal(status, 502);
+    assert.match(body.error, /unreachable/);
   });
 });
