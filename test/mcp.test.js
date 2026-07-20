@@ -13,6 +13,10 @@ import {
   resolveMcpAuth,
 } from '../lib/mcp/auth.js';
 import {
+  CHATGPT_MCP_REDIRECT_URIS,
+  isChatGptConnectorOauthRedirectUri,
+} from '../lib/mcp/oauth-provider.js';
+import {
   filterTargetList,
   summarizeTargetLibrary,
 } from '../lib/mcp/server.js';
@@ -465,6 +469,87 @@ describe('/mcp OAuth (Claude connector)', () => {
         } finally {
           await apiKeyClient.close();
         }
+      }
+    );
+  });
+
+  it('accepts ChatGPT platform + per-connector redirect URIs', async () => {
+    assert.equal(
+      isChatGptConnectorOauthRedirectUri(
+        'https://chatgpt.com/connector/oauth/cb_abc123'
+      ),
+      true
+    );
+    assert.equal(
+      isChatGptConnectorOauthRedirectUri(
+        'https://chatgpt.com/connector_platform_oauth_redirect'
+      ),
+      false
+    );
+    assert.equal(
+      isChatGptConnectorOauthRedirectUri('https://chatgpt.com/evil'),
+      false
+    );
+
+    const dir = makeTmpDir();
+    const store = createTargetsStore(dir);
+
+    await withPublicServer(
+      (publicUrl) =>
+        createApp({
+          mapsKey: 'maps',
+          geocodingKey: '',
+          config: stubConfig,
+          adminUsername: '',
+          adminPassword: '',
+          targetsStore: store,
+          targetsPath: dir,
+          targetsPersistent: true,
+          mcpApiKey: MCP_KEY,
+          mcpOauthClientId: OAUTH_CLIENT_ID,
+          mcpOauthClientSecret: OAUTH_CLIENT_SECRET,
+          mcpPublicUrl: publicUrl,
+        }),
+      async ({ baseUrl }) => {
+        /**
+         * @param {string} redirectUri
+         */
+        async function authorize(redirectUri) {
+          const { challenge } = makePkce();
+          const authUrl = new URL('/authorize', baseUrl);
+          authUrl.searchParams.set('response_type', 'code');
+          authUrl.searchParams.set('client_id', OAUTH_CLIENT_ID);
+          authUrl.searchParams.set('redirect_uri', redirectUri);
+          authUrl.searchParams.set('code_challenge', challenge);
+          authUrl.searchParams.set('code_challenge_method', 'S256');
+          authUrl.searchParams.set('state', 'chatgpt-state');
+          authUrl.searchParams.set('resource', `${baseUrl}/mcp`);
+          return fetch(authUrl, { redirect: 'manual' });
+        }
+
+        const platformUri = CHATGPT_MCP_REDIRECT_URIS[0];
+        const platformRes = await authorize(platformUri);
+        assert.equal(platformRes.status, 302);
+        const platformLoc = platformRes.headers.get('location');
+        assert.ok(platformLoc);
+        assert.equal(
+          new URL(platformLoc).origin + new URL(platformLoc).pathname,
+          platformUri
+        );
+
+        const connectorUri =
+          'https://chatgpt.com/connector/oauth/cb_test_connector_1';
+        const connectorRes = await authorize(connectorUri);
+        assert.equal(connectorRes.status, 302);
+        const connectorLoc = connectorRes.headers.get('location');
+        assert.ok(connectorLoc);
+        assert.equal(
+          new URL(connectorLoc).origin + new URL(connectorLoc).pathname,
+          connectorUri
+        );
+
+        const rejected = await authorize('https://evil.example/callback');
+        assert.equal(rejected.status, 400);
       }
     );
   });

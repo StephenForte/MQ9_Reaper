@@ -42,7 +42,7 @@ cp .env.example .env
 | `CONFIG_PATH` | Optional absolute path to runtime config MD (Render sets this via Blueprint) |
 | `TARGETS_PATH` | Optional absolute directory for saved target JSON (Render sets `/var/data/targets`) |
 | `MCP_API_KEY` | Optional; ≥16 characters enables remote MCP at `/mcp` (Bearer for Cursor) |
-| `MCP_OAUTH_CLIENT_ID` | Optional; OAuth client id for Claude.ai custom connector |
+| `MCP_OAUTH_CLIENT_ID` | Optional; OAuth client id for Claude.ai / ChatGPT custom connectors |
 | `MCP_OAUTH_CLIENT_SECRET` | Optional; ≥16 chars; OAuth client secret for Claude |
 | `MCP_PUBLIC_URL` | Public https origin for OAuth metadata (e.g. `https://mq9-reaper.onrender.com`). Falls back to `RENDER_EXTERNAL_URL` |
 
@@ -105,7 +105,7 @@ On desktop Chrome, Firefox, and Safari (latest):
    - `ADMIN_USERNAME` / `ADMIN_PASSWORD` (≥12 chars) — required to enable the Admin tab
    - `ADMIN_SESSION_SECRET` (≥16 chars) — recommended; signs Admin session cookies
    - `MCP_API_KEY` (≥16 chars) — optional; enables remote MCP at `/mcp`
-   - `MCP_OAUTH_CLIENT_ID` / `MCP_OAUTH_CLIENT_SECRET` (≥16) — optional; Claude.ai OAuth connector
+   - `MCP_OAUTH_CLIENT_ID` / `MCP_OAUTH_CLIENT_SECRET` (≥16) — optional; Claude.ai / ChatGPT OAuth connector
    - `MCP_PUBLIC_URL` — public https origin for OAuth discovery (or rely on `RENDER_EXTERNAL_URL`)
    - `CONFIG_PATH` is already set by Blueprint to `/var/data/app-config.md`
 4. Deploy, then smoke-check:
@@ -164,6 +164,19 @@ Claude’s Add custom connector dialog only accepts **OAuth Client ID / Secret**
    - **Advanced → OAuth Client ID / Secret:** paste the values above
 3. Click Add, then Connect — Claude opens authorize; the server auto-approves and redirects to Claude’s callback.
 4. Health should show `mcpConfigured: true` and `mcpOauthConfigured: true`.
+
+### ChatGPT (Developer mode OAuth)
+
+ChatGPT uses Streamable HTTP + OAuth (not a Bearer header field like Cursor).
+
+1. Same env as Claude (`MCP_API_KEY`, `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET`, `MCP_PUBLIC_URL`).
+2. In ChatGPT (Plus/Pro/Business/Enterprise/Edu, web):
+   - **Settings → Security and login → Developer mode** → on
+   - **Settings → Plugins** (or [chatgpt.com/plugins](https://chatgpt.com/plugins)) → create a developer-mode app
+   - **URL:** `https://mq9-reaper.onrender.com/mcp`
+   - **OAuth Client ID / Secret:** paste the values above
+3. Save → authorize. The server allowlists ChatGPT callbacks (`connector_platform_oauth_redirect` and `https://chatgpt.com/connector/oauth/{callback_id}`).
+4. In a chat: **+ → Developer mode** → enable the app, then call tools (e.g. `list_targets`).
 
 **Tools:** `list_targets`, `get_target`, `create_target`, `summarize_library`  
 **Resources:** `targets://library`, `targets://{id}`  

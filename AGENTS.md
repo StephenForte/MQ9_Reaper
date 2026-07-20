@@ -32,7 +32,7 @@ Exit criteria are in the PRD §9. Demo each phase before expanding scope. **P0�
   - `ADMIN_USERNAME` / `ADMIN_PASSWORD` — gate Admin tab + `/api/admin/*`. Password must be ≥12 chars. Both required or Admin stays hidden.
   - `ADMIN_SESSION_SECRET` — recommended (≥16 chars); signs Admin session cookies. If omitted, a password-derived key is used with a warning.
   - `MCP_API_KEY` — optional (≥16 chars); enables Streamable HTTP MCP at `/mcp`. Cursor uses `Authorization: Bearer <key>`. If unset or too short, `/mcp` returns 503.
-  - `MCP_OAUTH_CLIENT_ID` / `MCP_OAUTH_CLIENT_SECRET` — optional (≥16 secret); enables OAuth AS for Claude.ai custom connectors. Requires `MCP_PUBLIC_URL` or `RENDER_EXTERNAL_URL`.
+  - `MCP_OAUTH_CLIENT_ID` / `MCP_OAUTH_CLIENT_SECRET` — optional (≥16 secret); enables OAuth AS for Claude.ai / ChatGPT custom connectors. Requires `MCP_PUBLIC_URL` or `RENDER_EXTERNAL_URL`.
   - `MCP_PUBLIC_URL` — public https origin for OAuth metadata (no path).
   - `CONFIG_PATH` — optional absolute path to the runtime config MD. Render Blueprint sets `/var/data/app-config.md` on the persistent disk.
   - `TARGETS_PATH` — optional absolute directory for saved target JSON. Render Blueprint sets `/var/data/targets`. Locally defaults to `data/targets` (gitignored).
@@ -43,7 +43,7 @@ Exit criteria are in the PRD §9. Demo each phase before expanding scope. **P0�
 - **Recenter:** When `confirmOnRecenter` is true and ≥1 candidate is selected, prompt before center/radius change or Reload targets.
 - **Targets (P2/P3):** Operator clicks **Load targets** (no auto-scatter). Default source is **OpenStreetMap places** via server Overpass proxy (`GET /api/overpass`); Selection can switch to **random** uniform disk (`public/js/dots.js`). Both honor `minDotSpacingMeters` (close ok, overlap not). When `overpassFillRandom` is true, OSM shortfalls are padded with random samples. OSM `name` tags seed annotations on Save (else reverse-geocode). Center/radius change clears candidates until Load again. Selection requires `minSelections`–`maxSelections` (default 1–12). When `blockExtraSelections` is true (default), selecting above max is blocked; when false, extras are allowed but Save stays gated to the range. New exports require non-empty `title` and `category`; Download JSON and Save to server share the same gate.
 - **Admin (P6/P7):** Login form → HttpOnly session cookie (HMAC via `ADMIN_SESSION_SECRET` or password-derived fallback). Password ≥12 chars. Timing-safe credential compare; 5 logins/min/IP. Atomic MD writes. `trust proxy` for Secure cookies on Render. After save, **Apply & reload**. Admin can edit title/category or delete saved target JSON files. No OAuth. Render Blueprint: `plan: starter` + disk at `/var/data`.
-- **MCP:** Colocated Streamable HTTP at `/mcp` (`lib/mcp/`). Read + create only (no Admin delete/patch). Reuses `targetsStore`. Bearer `MCP_API_KEY` and/or OAuth access tokens (when `MCP_OAUTH_*` configured). OAuth redirect allowlist includes `https://claude.ai/api/mcp/auth_callback`.
+- **MCP:** Colocated Streamable HTTP at `/mcp` (`lib/mcp/`). Read + create only (no Admin delete/patch). Reuses `targetsStore`. Bearer `MCP_API_KEY` and/or OAuth access tokens (when `MCP_OAUTH_*` configured). OAuth redirect allowlist includes Claude (`https://claude.ai/api/mcp/auth_callback`) and ChatGPT (`connector_platform_oauth_redirect` + `https://chatgpt.com/connector/oauth/{id}`).
 
 ## Repo layout
 
@@ -158,7 +158,7 @@ npm start              # http://localhost:3000
 Without `GEOCODING_API_KEY`, map click and lat/long still work; address geocode returns 503.
 Without both `ADMIN_USERNAME` and `ADMIN_PASSWORD` (12+ chars), the Admin tab stays hidden. Set `ADMIN_SESSION_SECRET` (16+) in production.
 Without `MCP_API_KEY` (16+), `/mcp` stays disabled (503).
-Without `MCP_OAUTH_CLIENT_ID` / `MCP_OAUTH_CLIENT_SECRET` + public URL, Claude OAuth stays off (Cursor Bearer still works).
+Without `MCP_OAUTH_CLIENT_ID` / `MCP_OAUTH_CLIENT_SECRET` + public URL, Claude/ChatGPT OAuth stays off (Cursor Bearer still works).
 
 ## When changing behavior
 

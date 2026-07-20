@@ -669,7 +669,7 @@ if (isMain) {
         );
       } else if (mcpBootAuth.oauthReason) {
         console.warn(
-          `Warning: ${mcpBootAuth.oauthReason} — Claude OAuth connector stays disabled (Cursor Bearer still works).`
+          `Warning: ${mcpBootAuth.oauthReason} — Claude/ChatGPT OAuth stays disabled (Cursor Bearer still works).`
         );
       }
     }
