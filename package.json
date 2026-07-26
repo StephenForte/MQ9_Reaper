@@ -12,7 +12,7 @@
     "health:probe": "node -e \"fetch('http://localhost:'+(process.env.PORT||3000)+'/api/health?probe=geocode').then(async r=>{const j=await r.json();console.log(j);if(j.geocodingProbe&&j.geocodingProbe.ok===false)process.exit(2)}).catch(e=>{console.error(e);process.exit(1)})\""
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "private": true,
   "dependencies": {
@@ -22,6 +22,7 @@
     "zod": "^4.4.3"
   },
   "overrides": {
-    "fast-uri": "3.1.4"
+    "fast-uri": "3.1.4",
+    "@hono/node-server": ">=2.0.5"
   }
 }
