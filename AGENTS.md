@@ -25,7 +25,7 @@ Exit criteria are in the PRD §9. Demo each phase before expanding scope. **P0�
 
 ## Architecture rules
 
-- **Topology:** Node/Express web service on Render (not a pure static site). Keeps Geocoding off the browser key surface.
+- **Topology:** Node/Express web service on Render (not a pure static site). Keeps Geocoding off the browser key surface. Blueprint `NODE_VERSION` is `26.12.1` or a newer 26.x security patch. `package.json` `engines.node` stays `>=20` so local installs are unchanged.
 - **Secrets:**
   - `GOOGLE_MAPS_API_KEY` — browser Maps JS key; exposed via `/api/config` by design. Restrict by HTTP referrer + Maps JavaScript API only.
   - `GEOCODING_API_KEY` — server only. Never send to the client. Restrict by IP + Geocoding API.
