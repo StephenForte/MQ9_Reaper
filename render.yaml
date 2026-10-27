@@ -12,7 +12,7 @@ services:
       sizeGB: 1
     envVars:
       - key: NODE_VERSION
-        value: "20"
+        value: "26.12.1"
       - key: CONFIG_PATH
         value: /var/data/app-config.md
       - key: TARGETS_PATH

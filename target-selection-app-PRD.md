@@ -256,7 +256,7 @@ Legacy config key `requiredSelections` (if present alone) maps to `maxSelections
 ## 7. Architecture & Tech Notes
 
 ### 7.1 Topology
-- **Single Render Web Service** (Node.js + Express, ESM) that:
+- **Single Render Web Service** (Node.js 26.12.1 or newer on Render + Express, ESM; local Node 20+ is fine) that:
   1. Serves the static frontend under `public/` (plain HTML/CSS/JS modules — no SPA framework).
   2. Exposes config, health, geocode (forward + reverse), and optional Admin APIs (§7.5 / `AGENTS.md`).
 

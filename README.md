@@ -98,7 +98,7 @@ On desktop Chrome, Firefox, and Safari (latest):
 ## Deploy on Render
 
 1. Push this repo to GitHub.
-2. Create a **Web Service** from Blueprint (`render.yaml`) — **Starter** plan with disk at `/var/data`.
+2. Create a **Web Service** from Blueprint (`render.yaml`) — **Starter** plan with disk at `/var/data`. Blueprint pins `NODE_VERSION` to **26.12.1** (October 2026 Node.js security release, or a newer 26.x patch). Local Node 20+ is enough; do not add `.nvmrc` or raise `engines` for this pin.
 3. Set:
    - `GOOGLE_MAPS_API_KEY` — referrer-restrict to your Render domain + Maps JavaScript API
    - `GEOCODING_API_KEY` — Geocoding API only; IP-restrict to Render egress when practical
